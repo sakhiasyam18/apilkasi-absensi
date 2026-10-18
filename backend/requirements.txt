@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+python-multipart
+sqlalchemy>=2.0
+pydantic>=2
+pydantic-settings
+pillow
+numpy
+scipy
+insightface
+onnxruntime
+pytest
+httpx
