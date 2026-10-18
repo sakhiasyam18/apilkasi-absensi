@@ -4,6 +4,7 @@
 > Ditujukan untuk dibaca oleh AI coding agent (Antigravity) dan developer.
 > Gabungan dari Tugas 1, Tugas 2, dan Diagram Spesifikasi Sistem, sudah diselaraskan.
 > Penulis: Asyam Sakhi Maulana (240535600363), Daffa Aleia Amrita Waskitha (240535612453).
+> **Revisi 2:** ditambahkan konsep **Kelas** dan **roster** (daftar mahasiswa per kelas, pengganti integrasi SIAKAD). Registrasi wajah kini berbasis verifikasi NIM yang sudah ada di roster.
 
 ---
 
@@ -21,26 +22,29 @@
 
 ## 1. Ringkasan Sistem
 
-Aplikasi Android (Flutter) untuk dosen. Dosen memotret kelas, backend (FastAPI + InsightFace) mendeteksi dan mengenali wajah mahasiswa, lalu mencatat kehadiran dan poin.
+Aplikasi Android (Flutter) untuk dosen. Dosen mengelola **kelas** dan **daftar mahasiswa (roster)**, memotret kelas, lalu backend (FastAPI + InsightFace) mendeteksi dan mengenali wajah mahasiswa serta mencatat kehadiran dan poin.
 
 | Item | Nilai |
 |---|---|
 | Kapasitas | Maks. 15 mahasiswa per kelas, skala 1 sampai 2 kelas |
 | Platform | Android (output `.apk`), dipasang di HP dosen |
 | Backend | Berjalan di laptop/PC lokal, diakses lewat Wi-Fi yang sama |
-| Autentikasi | Tidak ada login/akun. Identitas = Nama Lengkap + NIM |
-| Poin | Hadir +10, Tidak Hadir -10 (dihitung sekali saat finalisasi) |
-| Registrasi | Mahasiswa mendaftar sendiri di aplikasi pada HP dosen (bergantian) |
+| Autentikasi | Tidak ada login/akun. Identitas mahasiswa = NIM |
+| Kelas dan roster | Dosen membuat kelas lalu mengisi roster (import CSV atau input manual). Roster berperan sebagai pengganti data SIAKAD |
+| Registrasi wajah | Mahasiswa memasukkan NIM yang sudah ada di roster, lalu mengambil 5 foto, bergantian di HP dosen |
+| Poin | Hadir +10, Tidak Hadir -10 (dihitung sekali saat finalisasi), total poin per kelas |
 
 ### Alur besar
 
-1. Registrasi mahasiswa (sekali): nama, NIM, 5 foto wajah, backend membuat embedding.
-2. Dosen membuat sesi presensi (nama kegiatan, tanggal, waktu, pertemuan ke-).
-3. Dosen memotret kelas (boleh berkali-kali, maks. 5 capture).
-4. Backend: detection, recognition, matching. Hasil digabung per mahasiswa.
-5. Wajah tidak dikenali: verifikasi manual oleh dosen.
-6. Dosen finalisasi: status hadir/tidak hadir ditentukan, poin dihitung, disimpan.
+0. **Persiapan dosen (sekali per kelas):** buat kelas, isi roster (nama + NIM) lewat import CSV atau input manual.
+1. **Registrasi wajah (sekali per mahasiswa):** mahasiswa memasukkan NIM, sistem memverifikasi ke roster, lalu 5 foto wajah menghasilkan embedding.
+2. **Sesi presensi:** dosen membuat sesi untuk sebuah kelas (nama kegiatan, tanggal, waktu, pertemuan ke-). Peserta wajib = roster kelas tersebut.
+3. **Pengambilan foto:** dosen memotret kelas (boleh berkali-kali, maks. 5 capture).
+4. **Pengenalan:** backend melakukan detection, recognition, matching. Hasil digabung per mahasiswa.
+5. **Verifikasi manual:** wajah tidak dikenali diperiksa dosen.
+6. **Finalisasi:** status hadir/tidak hadir ditentukan, poin dihitung dan disimpan.
 
+> Integrasi SIAKAD sungguhan (butuh akses resmi kampus) adalah pengembangan lanjutan. Cukup mengganti sumber import roster, desain lainnya tidak berubah.
 ---
 
 ## 2. Tech Stack
@@ -56,7 +60,7 @@ Aplikasi Android (Flutter) untuk dosen. Dosen memotret kelas, backend (FastAPI +
 | Resize/kompres | `flutter_image_compress` | Native, cepat, koreksi orientasi |
 | Analisis gambar | `image` (Dart) dalam `compute()` isolate | Blur & luminansi pada gambar kecil |
 | Penyimpanan lokal | `sqflite` (antrean upload), `shared_preferences` (pengaturan) | |
-| Lain-lain | `path_provider`, `crypto` (SHA-256), `uuid`, `connectivity_plus` | |
+| Lain-lain | `path_provider`, `crypto` (SHA-256), `uuid`, `connectivity_plus`, `file_picker` (pilih file CSV roster) | |
 | Backend | Python 3.10 atau 3.11, FastAPI, Uvicorn | |
 | ORM | SQLAlchemy 2.0 + Pydantic v2 | |
 | Face AI | `insightface` + `onnxruntime` (CPU) | Model `buffalo_l` (alternatif ringan: `buffalo_s`) |
@@ -84,7 +88,8 @@ presensi-wajah/
 │   │   ├── schemas.py               # Pydantic request/response
 │   │   ├── errors.py                # AppError + handler format error seragam
 │   │   ├── routers/
-│   │   │   ├── students.py          # /register, /students, /students/{id}/faces
+│   │   │   ├── classes.py           # /classes, roster (JSON + CSV import)
+│   │   │   ├── students.py          # /students, /students/lookup, /students/{id}/faces
 │   │   │   ├── sessions.py          # /sessions, participants, finalize
 │   │   │   ├── attendance.py        # /attendance/recognize, confirm, list
 │   │   │   └── points.py            # /points
@@ -93,7 +98,8 @@ presensi-wajah/
 │   │       ├── image_utils.py       # Pillow: exif transpose, resize, ke BGR numpy
 │   │       ├── matching.py          # cosine, Hungarian, ambang
 │   │       ├── attendance_service.py# merge-max, upsert, progress
-│   │       └── points_service.py    # finalisasi + poin (transaksi)
+│   │       ├── points_service.py    # finalisasi + poin (transaksi)
+│   │       └── roster_service.py    # parse CSV, upsert mahasiswa, tautkan ke kelas
 │   ├── storage/                     # runtime: captures/ (foto presensi)
 │   └── tests/                       # pytest
 └── mobile/
@@ -109,7 +115,8 @@ presensi-wajah/
         │                             # bbox_transform, backoff, progress_merge
         ├── services/upload_queue/    # queue_db.dart, queue_worker.dart
         └── features/
-            ├── registration/         # form + 5 foto berpandu
+            ├── classes/              # daftar kelas, roster, import CSV, tambah manual
+            ├── registration/         # lookup NIM + 5 foto berpandu
             ├── session/              # buat sesi, beranda sesi
             ├── attendance/           # kamera, hasil + bbox, verifikasi manual, progres
             ├── points/               # daftar poin
@@ -122,20 +129,21 @@ presensi-wajah/
 
 | ID | Aturan |
 |---|---|
-| BR-01 | Registrasi: NIM wajib 12 digit angka (`^\d{12}$`), nama tidak kosong, NIM unik (dicek di backend). |
-| BR-02 | Mahasiswa dianggap terdaftar penuh hanya jika 5 foto wajah valid tersimpan (`has_faces = true`). |
-| BR-03 | Sesi baru: daftar peserta wajib = semua mahasiswa dengan `has_faces = true`. |
+| BR-01 | Roster: NIM wajib 12 digit angka (`^\d{12}$`), unik secara global. Nama tidak kosong (setelah trim). Maks. `MAX_STUDENTS_PER_CLASS` (awal 15) mahasiswa per kelas. Satu mahasiswa boleh berada di lebih dari satu kelas (data wajah dipakai bersama). |
+| BR-02 | Registrasi wajah hanya untuk NIM yang sudah ada di roster minimal satu kelas. Layar registrasi **tidak** membuat mahasiswa baru. Wajah dianggap terdaftar penuh jika 5 foto valid tersimpan (`has_faces = true`). |
+| BR-03 | Peserta wajib sesi = seluruh roster kelas pada saat sesi dibuat (snapshot). Peserta yang belum punya wajah tetap menjadi peserta, tetapi hanya bisa hadir lewat konfirmasi manual atau setelah mendaftarkan wajah lalu difoto ulang. |
 | BR-04 | Satu capture dapat memuat banyak wajah. Hasil digabung per `student_id`, simpan **skor tertinggi**. Satu mahasiswa hanya dihitung sekali per sesi. |
 | BR-05 | Dalam satu foto, satu wajah hanya boleh cocok ke satu mahasiswa dan sebaliknya (Hungarian assignment). |
 | BR-06 | Wajah teridentifikasi jika cosine similarity >= `MATCH_THRESHOLD` (awal 0,4). Selain itu status `unknown`. |
 | BR-07 | Wajah `unknown` **tidak** otomatis menjadi tidak hadir. Dosen memverifikasi manual: memilih nama peserta, maka status hadir dengan `method = manual`. |
-| BR-08 | Jika wajah unknown adalah mahasiswa belum terdaftar: ia registrasi dulu, otomatis ditambahkan ke sesi berjalan, lalu presensi ulang (capture baru). |
+| BR-08 | Penanganan wajah `unknown`: (a) peserta di roster yang belum punya wajah: konfirmasi manual, atau daftar wajah lalu capture ulang; (b) mahasiswa kelas yang belum ada di roster: dosen memakai "Tambah ke Kelas" dari layar hasil (menambah ke roster dan ke sesi berjalan), lalu konfirmasi; (c) orang di luar kelas: diabaikan, tanpa efek pada poin. |
 | BR-09 | Maksimal `MAX_CAPTURES_PER_SESSION` (awal 5) capture per sesi. Dosen boleh mengakhiri kapan saja. |
 | BR-10 | Finalisasi hanya sekali per sesi. Peserta tanpa catatan hadir menjadi `tidak_hadir`. |
-| BR-11 | Poin: hadir `+10`, tidak hadir `-10`, ditulis ke `point_history` dan `students.total_points` dalam **satu transaksi**. |
+| BR-11 | Poin: hadir `+10`, tidak hadir `-10`, ditulis ke `point_history` dalam **satu transaksi**. Total poin per kelas = jumlah `delta` pada sesi milik kelas tersebut (tidak disimpan sebagai kolom). |
 | BR-12 | Poin resmi hanya dihitung di backend. Mobile menampilkan pratinjau berlabel "perkiraan". |
 | BR-13 | Foto presensi tidak boleh hilang saat jaringan buruk: mobile memakai antrean upload dengan retry. |
-
+| BR-14 | Mendaftar ulang wajah untuk mahasiswa yang sudah `has_faces` memerlukan `overwrite=true`, dan aplikasi wajib menampilkan dialog konfirmasi (dosen mendampingi), agar data wajah tidak tertimpa tanpa sengaja. |
+| BR-15 | Import roster: NIM yang sudah ada di basis data hanya dihubungkan ke kelas (data lama dipertahankan). Perbedaan nama dilaporkan sebagai peringatan, tidak diubah otomatis. |
 ---
 
 ## 5. Konfigurasi (`backend/.env.example`)
@@ -159,6 +167,8 @@ REG_MIN_SELF_SIMILARITY=0.30  # rata-rata kemiripan antar 5 foto (pastikan satu 
 # Matching & aturan
 MATCH_THRESHOLD=0.40          # cosine similarity, KALIBRASI dengan data nyata
 MAX_CAPTURES_PER_SESSION=5
+MAX_STUDENTS_PER_CLASS=15
+MAX_IMPORT_ROWS=200          # batas baris CSV/payload roster sekali kirim
 POINTS_PRESENT=10
 POINTS_ABSENT=-10
 MAX_UPLOAD_MB=10
@@ -182,13 +192,26 @@ const analysisWidth = 320;          // lebar gambar untuk analisis blur/luminans
 Jalankan `PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;` saat koneksi dibuka. Tabel dibuat lewat `Base.metadata.create_all()`. Definisi acuan:
 
 ```sql
+CREATE TABLE classes (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  name        TEXT NOT NULL,                       -- mis. "Pemrograman Mobile A"
+  code        TEXT,                                -- opsional, mis. "PM-A"
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE students (
-  id            INTEGER PRIMARY KEY AUTOINCREMENT,
-  nim           TEXT NOT NULL UNIQUE,
-  full_name     TEXT NOT NULL,
-  has_faces     INTEGER NOT NULL DEFAULT 0,        -- 0/1
-  total_points  INTEGER NOT NULL DEFAULT 0,
-  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  nim         TEXT NOT NULL UNIQUE,
+  full_name   TEXT NOT NULL,
+  has_faces   INTEGER NOT NULL DEFAULT 0,          -- 0/1
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE class_students (                      -- roster (many-to-many)
+  class_id    INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+  student_id  INTEGER NOT NULL REFERENCES students(id),
+  added_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (class_id, student_id)
 );
 
 CREATE TABLE face_embeddings (
@@ -202,6 +225,7 @@ CREATE TABLE face_embeddings (
 
 CREATE TABLE sessions (
   id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  class_id        INTEGER NOT NULL REFERENCES classes(id),
   activity_name   TEXT NOT NULL,
   session_date    TEXT NOT NULL,                   -- YYYY-MM-DD
   session_time    TEXT NOT NULL,                   -- HH:MM
@@ -264,37 +288,53 @@ CREATE TABLE point_history (
 );
 ```
 
+Total poin per kelas (dipakai `GET /points` dan respons finalisasi):
+
+```sql
+SELECT s.id, s.full_name, s.nim, COALESCE(SUM(ph.delta), 0) AS total_points
+FROM class_students cs
+JOIN students s ON s.id = cs.student_id
+LEFT JOIN sessions se ON se.class_id = cs.class_id
+LEFT JOIN point_history ph ON ph.student_id = s.id AND ph.session_id = se.id
+WHERE cs.class_id = :class_id
+GROUP BY s.id
+ORDER BY total_points DESC;
+```
+
 Catatan:
 - Selama sesi `active`, baris `attendance` hanya dibuat untuk yang `hadir`. Baris `tidak_hadir` dibuat saat finalisasi.
-- Waktu disimpan sebagai ISO string. Gunakan zona waktu lokal server secara konsisten.
-
+- `has_faces` bernilai 1 hanya jika 5 embedding tersimpan.
+- Waktu disimpan sebagai ISO string dengan zona waktu lokal server secara konsisten.
 ---
 
 ## 7. Kontrak REST API
 
-Base URL: `http://<IP_LAPTOP>:8000`. Semua body JSON kecuali yang ditandai multipart. Semua endpoint tanpa autentikasi (jaringan lokal).
+Base URL: `http://<IP_LAPTOP>:8000`. Semua body JSON kecuali yang ditandai multipart. Tanpa autentikasi (jaringan lokal).
 
 ### 7.1 Format error seragam
 
 HTTP status sesuai jenis error, body:
 
 ```json
-{ "detail": { "code": "nim_duplicate", "message": "NIM sudah terdaftar." } }
+{ "detail": { "code": "class_full", "message": "Kelas sudah mencapai batas 15 mahasiswa." } }
 ```
 
 | code | HTTP | Arti |
 |---|---|---|
-| `validation_error` | 422 | Input tidak valid (format NIM, nama kosong, jumlah file salah) |
-| `nim_duplicate` | 409 | NIM sudah ada |
-| `student_not_found` | 404 | |
+| `validation_error` | 422 | Input tidak valid (format NIM, nama kosong, jumlah file salah, kelas tanpa mahasiswa) |
+| `invalid_csv` | 422 | File CSV tidak terbaca, header tidak sesuai, atau baris melebihi `MAX_IMPORT_ROWS` |
+| `class_not_found` | 404 | |
+| `class_full` | 409 | Penambahan melebihi `MAX_STUDENTS_PER_CLASS` (tidak ada yang diterapkan) |
+| `student_not_found` | 404 | NIM/ID tidak ada di roster manapun |
+| `student_not_in_class` | 409 | Mahasiswa bukan anggota roster kelas sesi |
+| `faces_already_registered` | 409 | Wajah sudah terdaftar dan `overwrite` tidak diberikan |
 | `session_not_found` | 404 | |
 | `session_finalized` | 409 | Aksi ditolak karena sesi sudah final |
 | `capture_limit_reached` | 409 | Melebihi `MAX_CAPTURES_PER_SESSION` |
-| `no_face_detected` | 422 | Tidak ada wajah (registrasi: foto tertentu, lihat `details`) |
+| `no_face_detected` | 422 | Registrasi: tidak ada wajah pada foto tertentu (lihat `details`) |
 | `multiple_faces` | 422 | Registrasi: foto memuat lebih dari satu wajah |
 | `inconsistent_faces` | 422 | Registrasi: 5 foto tampak bukan satu orang |
 | `not_a_participant` | 409 | Mahasiswa bukan peserta sesi |
-| `student_not_ready` | 409 | Mahasiswa belum punya wajah terdaftar |
 | `checksum_mismatch` | 422 | SHA-256 tidak cocok |
 | `file_too_large` | 413 | |
 
@@ -305,39 +345,84 @@ Untuk error registrasi foto, sertakan `"details": [{"index": 2, "code": "multipl
 #### `GET /health`
 Respons: `{ "status": "ok", "model_loaded": true }`
 
-#### `POST /register`
-Body: `{ "full_name": "Asyam Sakhi Maulana", "nim": "240535600363" }`
-Validasi: nama tidak kosong (trim), NIM `^\d{12}$`, unik.
-Respons 201:
+#### `POST /classes`
+Body: `{ "name": "Pemrograman Mobile A", "code": "PM-A" }` (`code` opsional, `name` tidak kosong).
+Respons 201: `{ "id": 1, "name": "Pemrograman Mobile A", "code": "PM-A", "student_count": 0, "max_students": 15 }`
+
+#### `GET /classes`
+Respons: daftar kelas, masing-masing dengan `student_count` dan `faces_registered_count`.
+
+#### `GET /classes/{id}`
+Respons: data kelas + `students: [{ "id": 1, "nim": "...", "full_name": "...", "has_faces": false }]`.
+
+#### `POST /classes/{id}/students` (JSON, input manual atau bulk)
+Body:
 ```json
-{ "id": 1, "full_name": "Asyam Sakhi Maulana", "nim": "240535600363", "has_faces": false }
+{ "students": [ { "nim": "240535600363", "full_name": "Asyam Sakhi Maulana" } ] }
+```
+Aturan per baris (indeks mulai 1):
+- NIM tidak sesuai `^\d{12}$` atau nama kosong: baris ditolak dengan error `validation_error`, baris lain tetap diproses.
+- NIM belum ada di basis data: buat mahasiswa baru (`has_faces=false`) lalu tautkan ke kelas (`added`).
+- NIM sudah ada di basis data: hanya ditautkan ke kelas (`linked_existing`). Jika nama berbeda, tambahkan warning `name_mismatch` (nama lama tidak diubah, BR-15).
+- NIM sudah ada di kelas ini: dilewati (`skipped`).
+- Jika jumlah mahasiswa baru di kelas setelah penambahan akan melebihi batas: tolak seluruh request dengan `class_full`.
+
+Respons 200:
+```json
+{ "added": 2, "linked_existing": 1, "skipped": 0,
+  "errors":   [ { "row": 4, "nim": "1234", "code": "validation_error" } ],
+  "warnings": [ { "row": 2, "nim": "240535612453", "code": "name_mismatch", "existing_name": "Daffa Aleia A. W." } ] }
 ```
 
-#### `POST /students/{id}/faces` (multipart)
-Field: `files` (tepat 5 file JPEG), `pose_labels` (string dipisah koma, urutan sama dengan file, mis. `depan,kiri,kanan,atas,bawah`).
-Header opsional: `X-Content-SHA256` tidak dipakai di sini (lihat 7.3).
-Proses (atomik, jika satu gagal maka tidak ada yang disimpan):
-1. Tiap foto: `exif_transpose`, resize jika perlu, deteksi wajah. Harus **tepat 1 wajah** dengan `det_score >= REG_MIN_DET_SCORE`.
-2. Ambil `normed_embedding` tiap foto. Hitung rata-rata kemiripan antar 5 embedding. Jika `< REG_MIN_SELF_SIMILARITY` maka `inconsistent_faces`.
-3. Hapus embedding lama mahasiswa (registrasi ulang aman), simpan 5 baru, set `has_faces = true`.
-Respons 200: `{ "student_id": 1, "embeddings_saved": 5, "has_faces": true }`
+#### `POST /classes/{id}/students/import` (multipart, impor CSV)
+Field: `file` (CSV). Aturan CSV:
+- Wajib ada baris header. Kolom NIM bernama `nim`. Kolom nama bernama `nama`, `full_name`, atau `nama_lengkap` (tidak peka huruf besar/kecil).
+- Pemisah koma atau titik koma. Encoding UTF-8 (BOM diterima).
+- Maks. `MAX_IMPORT_ROWS` baris data, jika lebih maka `invalid_csv`.
+- Setelah parsing, diproses dengan logika yang sama seperti endpoint JSON di atas dan respons berbentuk sama.
+
+Contoh isi file:
+```csv
+nim,nama
+240535600363,Asyam Sakhi Maulana
+240535612453,Daffa Aleia Amrita Waskitha
+```
 
 #### `GET /students`
-Respons: `[ { "id": 1, "full_name": "...", "nim": "...", "has_faces": true, "total_points": 20 } ]`
+Query opsional `class_id`. Respons: `[ { "id": 1, "nim": "...", "full_name": "...", "has_faces": true } ]`.
+
+#### `GET /students/lookup?nim=240535600363`
+Dipakai layar registrasi wajah. Respons 200:
+```json
+{ "id": 1, "nim": "240535600363", "full_name": "Asyam Sakhi Maulana", "has_faces": false,
+  "classes": [ { "id": 1, "name": "Pemrograman Mobile A" } ] }
+```
+Jika format NIM salah: 422 `validation_error`. Jika NIM tidak ada di roster manapun: 404 `student_not_found` (pesan: "NIM belum terdaftar di kelas manapun. Hubungi dosen.").
+
+#### `POST /students/{id}/faces` (multipart)
+Field: `files` (tepat 5 file JPEG), `pose_labels` (string dipisah koma, urutan sama dengan file, mis. `depan,kiri,kanan,atas,bawah`). Query: `overwrite` (bool, default `false`).
+Aturan:
+- Jika mahasiswa sudah `has_faces` dan `overwrite` bukan `true`: 409 `faces_already_registered` (BR-14).
+Proses (atomik, jika satu gagal maka tidak ada yang disimpan/diubah):
+1. Tiap foto: `exif_transpose`, resize jika perlu, deteksi wajah. Harus **tepat 1 wajah** dengan `det_score >= REG_MIN_DET_SCORE`.
+2. Ambil `normed_embedding` tiap foto. Hitung rata-rata kemiripan antar 5 embedding. Jika `< REG_MIN_SELF_SIMILARITY` maka `inconsistent_faces`.
+3. Hapus embedding lama (jika `overwrite`), simpan 5 baru, set `has_faces = true`, invalidasi cache embedding.
+Respons 200: `{ "student_id": 1, "embeddings_saved": 5, "has_faces": true }`
 
 #### `POST /sessions`
 Body:
 ```json
-{ "activity_name": "Pemrograman Mobile", "session_date": "2026-10-17", "session_time": "08:00", "meeting_number": 5 }
+{ "class_id": 1, "activity_name": "Pemrograman Mobile", "session_date": "2026-10-17",
+  "session_time": "08:00", "meeting_number": 5 }
 ```
-Proses: buat sesi `active`, isi `session_participants` dari semua `students.has_faces = true`. Jika peserta 0, kembalikan `validation_error` ("Belum ada mahasiswa terdaftar").
-Respons 201: objek sesi + `participants: [{student_id, full_name, nim}]`.
+Proses: buat sesi `active` untuk kelas tersebut, isi `session_participants` dari seluruh roster kelas (BR-03). Jika roster kosong maka `validation_error` ("Kelas belum memiliki mahasiswa.").
+Respons 201: objek sesi + `participants: [{student_id, full_name, nim, has_faces}]` + `without_faces_count` (jumlah peserta tanpa wajah, untuk peringatan di UI).
 
 #### `GET /sessions` dan `GET /sessions/{id}`
-Detail sesi berisi `status`, `capture_count`, `max_captures`, `participants`, dan `progress` (bentuk sama dengan 7.3).
+`GET /sessions` menerima query opsional `class_id`. Detail sesi berisi `class_id`, `status`, `capture_count`, `max_captures`, `participants`, dan `progress` (bentuk sama dengan respons recognize).
 
 #### `POST /sessions/{id}/participants`
-Body: `{ "student_id": 7 }`. Syarat: sesi `active`, mahasiswa `has_faces`. Idempoten (jika sudah peserta, kembalikan 200).
+Body: `{ "student_id": 7 }`. Syarat: sesi `active`, mahasiswa sudah ada di roster kelas sesi (jika belum: 409 `student_not_in_class`, dosen harus menambahkannya ke roster dulu lewat `POST /classes/{id}/students`). Idempoten (jika sudah peserta, kembalikan 200).
 Respons: sesi terbaru dengan daftar peserta.
 
 #### `POST /attendance/recognize` (multipart)
@@ -364,7 +449,7 @@ Respons 200:
   "progress": {
     "total_participants": 15,
     "identified": [ {"student_id": 3, "full_name": "Budi", "nim": "...", "score": 0.62, "method": "auto"} ],
-    "unidentified": [ {"student_id": 4, "full_name": "Sari", "nim": "..."} ]
+    "unidentified": [ {"student_id": 4, "full_name": "Sari", "nim": "...", "has_faces": true} ]
   }
 }
 ```
@@ -379,25 +464,25 @@ Respons: objek `progress` terbaru.
 Syarat: sesi `active` (jika sudah final maka `session_finalized` 409).
 Transaksi tunggal:
 1. Untuk tiap peserta tanpa baris `attendance`: buat `tidak_hadir` (`method='auto'`).
-2. Untuk tiap peserta: `delta = +POINTS_PRESENT` jika `hadir`, selain itu `POINTS_ABSENT`. Insert `point_history`, update `students.total_points`.
+2. Untuk tiap peserta: `delta = +POINTS_PRESENT` jika `hadir`, selain itu `POINTS_ABSENT`. Insert `point_history`.
 3. Set sesi `final`, isi `finalized_at`.
 Respons:
 ```json
-{ "session_id": 1, "status": "final",
-  "results": [ {"student_id": 3, "full_name": "Budi", "status": "hadir", "method": "auto", "delta": 10, "total_points": 30} ] }
+{ "session_id": 1, "class_id": 1, "status": "final",
+  "results": [ {"student_id": 3, "full_name": "Budi", "status": "hadir", "method": "auto", "delta": 10, "class_total_points": 30} ] }
 ```
+`class_total_points` dihitung dengan query total poin per kelas (bagian 6).
 
 #### `GET /attendance?session_id=1`
-Respons: daftar baris kehadiran sesi (jika `session_id` kosong, semua sesi terbaru dulu).
+Respons: daftar baris kehadiran sesi (jika `session_id` kosong, semua sesi, terbaru dulu).
 
-#### `GET /points`
-Respons: `[ {"student_id": 3, "full_name": "Budi", "nim": "...", "total_points": 30} ]` urut poin menurun.
-Opsional `?student_id=3` menyertakan `history`.
+#### `GET /points?class_id=1`
+`class_id` wajib. Respons: `[ {"student_id": 3, "full_name": "Budi", "nim": "...", "total_points": 30} ]` urut poin menurun.
+Opsional `&student_id=3` menyertakan `history` (daftar `point_history` untuk kelas tersebut).
 
 ### 7.3 Checksum (opsional tapi diimplementasikan)
 
 Mobile mengirim header `X-Content-SHA256: <hex>` dari byte file JPEG final. Backend menghitung ulang SHA-256 atas byte yang diterima. Jika berbeda maka 422 `checksum_mismatch`, mobile menganggap gagal sementara dan retry.
-
 ---
 
 ## 8. Desain Backend
@@ -444,7 +529,7 @@ Dimensi yang dikembalikan menjadi `image_width/image_height` pada respons dan ta
 1. Validasi sesi (ada, `active`, kuota capture), cek idempotensi `client_capture_id`.
 2. Verifikasi checksum jika header ada.
 3. `load_for_recognition` lalu `faces = engine.analyze(bgr)`; buang wajah dengan `det_score < MIN_DET_SCORE`.
-4. Muat embedding semua peserta sesi: `E[student_id] = array (k, 512)` (cache di memori, invalidasi saat `/faces` berubah).
+4. Muat embedding peserta sesi yang `has_faces`: `E[student_id] = array (k, 512)` (cache di memori, invalidasi saat `/faces` berubah). Peserta tanpa wajah tidak ikut matriks kemiripan. Jika tidak ada satu pun peserta yang punya wajah, semua wajah pada foto berstatus `unknown`.
 5. Hitung matriks kemiripan `S[f][s] = max_k dot(face.normed_embedding, E[s][k])` (kedua vektor sudah ternormalisasi, sehingga dot = cosine).
 6. `scipy.optimize.linear_sum_assignment(-S)` (Hungarian). Pasangan dengan `S >= MATCH_THRESHOLD` menjadi `identified`; sisanya `unknown`. (Tangani kasus jumlah wajah tidak sama dengan jumlah peserta: matriks persegi panjang didukung.)
 7. Simpan foto ke `STORAGE_DIR/captures/session_<id>/capture_<no>.jpg` (gambar yang sudah diproses), simpan `captures` dan `capture_faces`.
@@ -467,28 +552,38 @@ Dimensi yang dikembalikan menjadi `image_width/image_height` pada respons dan ta
 
 | Rute | Layar | Fungsi |
 |---|---|---|
-| `/` | Beranda | Menu: Registrasi, Sesi Baru, Sesi Berjalan/Riwayat, Poin, Pengaturan. Banner status koneksi backend |
+| `/` | Beranda | Menu: Kelas, Registrasi Wajah, Pengaturan. Banner status koneksi backend |
 | `/settings` | Pengaturan | Input URL backend (mis. `http://192.168.1.10:8000`), tombol "Tes Koneksi" (`GET /health`) |
-| `/register` | Form registrasi | Nama + NIM (validasi regex), lanjut ke kamera |
+| `/classes` | Daftar kelas | Kartu kelas (nama, jumlah mahasiswa, jumlah yang sudah daftar wajah), tombol "Buat Kelas" |
+| `/classes/:id` | Roster kelas | Daftar mahasiswa dengan lencana "wajah terdaftar / belum". Tombol: Import CSV, Tambah Manual, Sesi Baru, Riwayat Sesi, Poin Kelas |
+| `/register` | Registrasi wajah | Input NIM (regex) lalu `GET /students/lookup`, tampilkan nama dan kelas, tombol "Ya, ini saya" |
 | `/register/capture` | Ambil 5 foto | Kamera depan, panduan real-time (bagian 9.3) |
-| `/session/new` | Buat sesi | Form kegiatan, tanggal, waktu, pertemuan ke- |
+| `/classes/:id/sessions/new` | Buat sesi | Form kegiatan, tanggal, waktu, pertemuan ke-. Peringatan jika ada peserta belum daftar wajah |
 | `/session/:id` | Beranda sesi | Daftar peserta + status hadir, tombol "Ambil Foto", "Selesaikan Presensi" |
 | `/session/:id/capture` | Kamera presensi | Kamera belakang, tombol shutter |
 | `/session/:id/result` | Hasil capture | Foto + kotak wajah, daftar belum teridentifikasi, verifikasi manual |
-| `/points` | Poin | Daftar poin mahasiswa |
+| `/classes/:id/points` | Poin kelas | Daftar poin mahasiswa kelas tersebut |
 
-### 9.2 Alur UI presensi
+### 9.2 Alur UI
 
+**Persiapan kelas (dosen):**
+1. Buat kelas (nama, kode opsional).
+2. Isi roster: **Import CSV** (pilih file dengan `file_picker`, unggah ke `/classes/{id}/students/import`) atau **Tambah Manual** (form NIM + nama, kirim ke `/classes/{id}/students`). Setelah itu tampilkan ringkasan hasil: jumlah ditambahkan, dilewati, error per baris, dan peringatan `name_mismatch`. Jika `class_full`, tampilkan pesan batas kelas.
+3. Minta tiap mahasiswa mendaftarkan wajah lewat menu Registrasi Wajah (bagian 9.3). Lencana di roster berubah menjadi "wajah terdaftar".
+
+**Presensi:**
 1. `session/:id` menampilkan checklist peserta (hadir/belum) dan jumlah capture (mis. 2/5).
 2. Tombol "Ambil Foto" membuka kamera. Setelah jepret: siapkan gambar (bagian 9.4), masukkan ke antrean upload, tampilkan "Memproses...".
 3. Saat respons diterima: tampilkan hasil dengan bbox (bagian 9.6), perbarui progres lokal (bagian 9.7).
 4. Jika masih ada `unidentified`: tampilkan opsi "Foto dari sudut lain" (jika kuota ada), "Verifikasi manual", atau "Selesaikan".
-5. Verifikasi manual: ketuk kotak wajah `unknown`, muncul bottom sheet daftar peserta `unidentified` untuk dipilih, panggil `/attendance/confirm`. Opsi "Belum terdaftar" menampilkan petunjuk: registrasi dulu lalu ambil foto ulang (peserta ditambah lewat `/sessions/{id}/participants` otomatis setelah registrasi selesai bila ada sesi aktif).
+5. Verifikasi manual (BR-07, BR-08): ketuk kotak wajah `unknown`, muncul bottom sheet daftar peserta `unidentified` untuk dipilih, panggil `/attendance/confirm`. Peserta bertanda "belum daftar wajah" dapat dikonfirmasi manual atau didaftarkan wajahnya lalu difoto ulang. Opsi **"Tambah ke Kelas"** (untuk mahasiswa kelas yang belum ada di roster) membuka form NIM + nama, memanggil `/classes/{id}/students` lalu `/sessions/{id}/participants`, kemudian peserta baru muncul di daftar untuk dikonfirmasi. Wajah orang di luar kelas cukup diabaikan.
 6. "Selesaikan Presensi": dialog konfirmasi menampilkan pratinjau poin berlabel "perkiraan" (+10 / -10), lalu `POST /sessions/{id}/finalize`. Setelah sukses, tampilkan hasil resmi dari backend.
 
-### 9.3 Registrasi berpandu (5 foto)
+### 9.3 Registrasi wajah berpandu (5 foto)
 
-Kamera depan, `ImageFormatGroup.nv21`, `startImageStream` untuk ML Kit.
+**Langkah 0 (verifikasi NIM):** mahasiswa mengetik NIM, divalidasi regex `^\d{12}$` di mobile, lalu aplikasi memanggil `GET /students/lookup`. Tampilkan nama dan kelas, lalu tombol "Ya, ini saya". Jika `404 student_not_found`, tampilkan pesan agar menghubungi dosen. Jika `has_faces = true`, tampilkan dialog "Wajah sudah terdaftar. Daftar ulang? (minta dosen mengonfirmasi)". Jika disetujui, lanjutkan dengan `overwrite=true` (BR-14).
+
+**Langkah 1 sampai 5 (pengambilan foto):** kamera depan, `ImageFormatGroup.nv21`, `startImageStream` untuk ML Kit.
 
 - ML Kit `FaceDetector` opsi: `performanceMode: fast`, `enableClassification: false`, `enableLandmarks: false`, `enableTracking: false`. Proses frame secara throttle (mis. satu frame per ~150 ms) dan lewati frame bila deteksi sebelumnya belum selesai.
 - Tombol ambil foto aktif **hanya jika**: tepat 1 wajah, wajah cukup besar (lebar bbox >= 25% lebar frame), dan sudut kepala masuk rentang target foto aktif.
@@ -504,7 +599,7 @@ Rentang pose awal (konfigurasi, tanda yaw/pitch **harus diverifikasi di perangka
 | 4 | atas | pitch dalam [10, 25] dan \|yaw\| <= 15 |
 | 5 | bawah | pitch dalam [-25, -10] dan \|yaw\| <= 15 |
 
-Setelah jepret tiap foto, jalankan cek kualitas (bagian 9.5). Jika gagal, tampilkan pesan ("Foto buram", "Terlalu gelap", "Terlalu terang") dan ulangi foto yang sama. Setelah 5 foto lolos: tampilkan pratinjau, lalu kirim `POST /register` (jika belum) dan `POST /students/{id}/faces`. Jika backend mengembalikan error per foto (`details[].index`), tandai foto itu untuk diulang.
+Setelah jepret tiap foto, jalankan cek kualitas (bagian 9.5). Jika gagal, tampilkan pesan ("Foto buram", "Terlalu gelap", "Terlalu terang") dan ulangi foto yang sama. Setelah 5 foto lolos: tampilkan pratinjau, lalu kirim `POST /students/{id}/faces` (dengan `overwrite=true` bila daftar ulang). Jika backend mengembalikan error per foto (`details[].index`), tandai foto itu untuk diulang.
 
 ### 9.4 Persiapan gambar sebelum upload (`image_prep.dart`)
 
@@ -588,7 +683,7 @@ Tabel `sqflite`:
 CREATE TABLE upload_queue (
   id TEXT PRIMARY KEY,          -- UUID (= client_capture_id untuk recognize)
   type TEXT NOT NULL,           -- 'recognize' | 'faces'
-  payload TEXT NOT NULL,        -- JSON: path file, session_id / student_id, sha256, dll
+  payload TEXT NOT NULL,        -- JSON: path file, session_id / student_id, overwrite, sha256, dll
   attempts INTEGER NOT NULL DEFAULT 0,
   next_attempt_at INTEGER NOT NULL,   -- epoch ms
   status TEXT NOT NULL,         -- 'pending' | 'done' | 'failed'
@@ -670,7 +765,7 @@ flutter build apk --release      # hasil: build/app/outputs/flutter-apk/app-rele
 
 Install: salin `.apk` ke HP lalu buka (izinkan sumber tidak dikenal), atau `adb install -r app-release.apk`. Untuk tugas kuliah, penandatanganan debug bawaan sudah cukup.
 
-Setelah terpasang: buka **Pengaturan**, isi URL backend, tekan **Tes Koneksi**.
+Setelah terpasang: buka **Pengaturan**, isi URL backend, tekan **Tes Koneksi**. Lalu buat kelas dan isi roster (import CSV atau manual) sebelum mahasiswa mendaftarkan wajah.
 
 ---
 
@@ -678,10 +773,13 @@ Setelah terpasang: buka **Pengaturan**, isi URL backend, tekan **Tes Koneksi**.
 
 ### 11.1 Backend (`pytest`, `TestClient`)
 
-- Registrasi: NIM tidak valid (422), NIM duplikat (409), 5 foto valid (200), foto 2 berisi dua wajah (422 `multiple_faces` dengan index), 5 foto orang berbeda (422 `inconsistent_faces`).
-- Sesi: peserta = semua `has_faces`. Menambah peserta idempoten.
+- Kelas dan roster: buat kelas, tambah mahasiswa manual (NIM tidak valid dilaporkan per baris), import CSV (header `nim,nama`, pemisah `;`, BOM, baris salah), NIM yang sudah ada hanya ditautkan dengan warning `name_mismatch`, kelas ke-16 ditolak (409 `class_full`), CSV tanpa header (422 `invalid_csv`).
+- Lookup NIM: ada (200), tidak ada di roster manapun (404), format salah (422).
+- Registrasi wajah: 5 foto valid (200), foto 2 berisi dua wajah (422 `multiple_faces` dengan index), 5 foto orang berbeda (422 `inconsistent_faces`), mahasiswa yang sudah punya wajah tanpa `overwrite` (409 `faces_already_registered`) dan dengan `overwrite=true` (200, embedding lama diganti).
+- Sesi: peserta = seluruh roster kelas (termasuk yang belum punya wajah). Roster kosong ditolak. Menambah peserta idempoten, mahasiswa di luar roster kelas ditolak (409 `student_not_in_class`).
 - Recognize: wajah dikenal teridentifikasi, wajah asing `unknown`, capture ke-6 ditolak (409), `client_capture_id` yang sama dikirim ulang tidak menambah `capture_count`, merge-max (skor lebih tinggi menggantikan), sesi final menolak recognize.
 - Confirm: peserta valid menjadi `hadir/manual`, bukan peserta ditolak (409).
+- Poin per kelas: mahasiswa di dua kelas memiliki total poin terpisah per kelas.
 - Finalize: poin +10/-10 benar, panggilan kedua ditolak (409), `UNIQUE(student_id, session_id)` mencegah poin ganda.
 - Gunakan 3 sampai 4 foto uji sintetis atau foto sukarelawan. Mock `FaceEngine` untuk unit test logika matching.
 
@@ -704,54 +802,55 @@ Setelah terpasang: buka **Pengaturan**, isi URL backend, tekan **Tes Koneksi**.
 
 Setiap fase: kerjakan, jalankan, verifikasi kriteria, baru lanjut.
 
-### Fase 1: Backend dasar
-Buat struktur `backend/`, `config.py`, `database.py`, `models.py` (skema bagian 6), `errors.py`, `GET /health`, `/register`, `/students`.
-**Kriteria:** `uvicorn` berjalan, `/docs` terbuka, registrasi nama+NIM berfungsi, NIM duplikat 409, format NIM salah 422, test pytest lulus.
+### Fase 1: Backend dasar, kelas, dan roster
+Buat struktur `backend/`, `config.py`, `database.py`, `models.py` (skema bagian 6), `errors.py`, `GET /health`, `/classes`, roster (`POST /classes/{id}/students` dan `/students/import` dengan `roster_service.py`), `GET /students`, `GET /students/lookup`.
+**Kriteria:** `uvicorn` berjalan, `/docs` terbuka. Kelas dapat dibuat, roster terisi lewat JSON dan CSV contoh (baris salah dilaporkan per baris, `name_mismatch` muncul), kelas ke-16 ditolak (`class_full`), lookup NIM bekerja. Test pytest lulus.
 
 ### Fase 2: Face engine dan pendaftaran wajah
-Implementasi `face_engine.py` (load sekali di lifespan), `image_utils.py`, `POST /students/{id}/faces` sesuai aturan atomik bagian 7.2.
-**Kriteria:** 5 foto valid tersimpan dan `has_faces=true`; foto dengan 0 atau 2 wajah ditolak dengan `details.index`; registrasi ulang mengganti embedding lama.
+Implementasi `face_engine.py` (load sekali di lifespan), `image_utils.py`, `POST /students/{id}/faces` sesuai aturan atomik dan `overwrite` (bagian 7.2).
+**Kriteria:** 5 foto valid tersimpan dan `has_faces=true`; foto dengan 0 atau 2 wajah ditolak dengan `details.index`; tanpa `overwrite` mahasiswa yang sudah terdaftar ditolak (409), dengan `overwrite=true` embedding lama diganti.
 
 ### Fase 3: Sesi, recognize, confirm, finalize
-Implementasi router sessions/attendance/points, `matching.py` (Hungarian + ambang), `attendance_service.py` (merge-max, idempotensi `client_capture_id`, kuota capture), `points_service.py` (transaksi).
+Implementasi router sessions/attendance/points (sesi terikat `class_id`, peserta = snapshot roster), `matching.py` (Hungarian + ambang), `attendance_service.py` (merge-max, idempotensi `client_capture_id`, kuota capture), `points_service.py` (transaksi, total poin per kelas).
 **Kriteria:** semua kasus uji bagian 11.1 lulus; `/docs` dapat dipakai menguji end-to-end dengan foto contoh.
 
-### Fase 4: Mobile fondasi
-Buat proyek Flutter, routing, tema, `settings_repository` + layar Pengaturan + Tes Koneksi, `api_client` (Dio) beserta model, layar Beranda.
-**Kriteria:** aplikasi terhubung ke backend lewat URL yang diatur; error jaringan ditampilkan ramah.
+### Fase 4: Mobile fondasi, kelas, dan roster
+Buat proyek Flutter, routing, tema, `settings_repository` + layar Pengaturan + Tes Koneksi, `api_client` (Dio) beserta model, Beranda, daftar kelas, roster kelas (lencana wajah), buat kelas, Import CSV (`file_picker`), Tambah Manual beserta tampilan ringkasan hasil.
+**Kriteria:** aplikasi terhubung ke backend lewat URL yang diatur; dosen dapat membuat kelas dan mengisi roster dari HP; error jaringan dan `class_full` ditampilkan ramah.
 
-### Fase 5: Registrasi di mobile
-Form + validasi regex, kamera depan, ML Kit panduan, cek pose, cek kualitas, pratinjau 5 foto, kompresi, upload (lewat antrean).
-**Kriteria:** registrasi lengkap berhasil dari HP; foto buram/gelap/terang ditolak di tempat; tombol foto nonaktif bila wajah != 1.
+### Fase 5: Registrasi wajah di mobile
+Layar NIM (regex + lookup + konfirmasi nama), dialog daftar ulang (`overwrite`), kamera depan, ML Kit panduan, cek pose, cek kualitas, pratinjau 5 foto, kompresi, upload (lewat antrean).
+**Kriteria:** registrasi berhasil untuk NIM yang ada di roster; NIM di luar roster ditolak dengan pesan jelas; foto buram/gelap/terang ditolak di tempat; tombol foto nonaktif bila wajah != 1.
 
 ### Fase 6: Sesi dan presensi di mobile
-Buat sesi, beranda sesi, kamera belakang, `image_prep`, antrean upload + retry + idempotensi, hasil dengan bbox (`toScreen`), progres `mergeMax`, verifikasi manual, finalisasi, layar Poin.
-**Kriteria:** alur lengkap dari buat sesi sampai finalisasi berjalan; saat Wi-Fi diputus lalu dinyalakan, foto terkirim tanpa duplikasi; bbox tepat pada berbagai ukuran layar.
+Buat sesi per kelas, beranda sesi, kamera belakang, `image_prep`, antrean upload + retry + idempotensi, hasil dengan bbox (`toScreen`), progres `mergeMax`, verifikasi manual, "Tambah ke Kelas", finalisasi, layar Poin kelas.
+**Kriteria:** alur lengkap dari buat sesi sampai finalisasi berjalan; saat Wi-Fi diputus lalu dinyalakan, foto terkirim tanpa duplikasi; bbox tepat pada berbagai ukuran layar; peserta tanpa wajah dapat dikonfirmasi manual.
 
 ### Fase 7: Pengemasan
-`README.md` (langkah bagian 10), skrip `run_backend`, build `.apk` release, uji end-to-end di HP nyata, kalibrasi (bagian 11.3).
+`README.md` (langkah bagian 10, termasuk format CSV roster), skrip `run_backend`, build `.apk` release, uji end-to-end di HP nyata, kalibrasi (bagian 11.3).
 **Kriteria:** orang lain dapat menjalankan backend dan memasang `.apk` hanya dengan mengikuti README.
-
 ---
 
 ## 13. Definition of Done
 
 - [ ] Semua endpoint bagian 7 berfungsi sesuai kontrak (diuji di `/docs` dan pytest).
-- [ ] Aturan BR-01 sampai BR-13 terpenuhi.
+- [ ] Aturan BR-01 sampai BR-15 terpenuhi.
+- [ ] Dosen dapat membuat kelas dan mengisi roster lewat import CSV maupun input manual dari aplikasi.
+- [ ] Mahasiswa hanya dapat mendaftarkan wajah dengan NIM yang ada di roster, dan daftar ulang meminta konfirmasi.
 - [ ] Kesepuluh proses komputasi mobile (bagian 9.3 sampai 9.8) terimplementasi: validasi regex, koreksi orientasi, ML Kit panduan, cek blur/cahaya, cek pose, resize+kompres, payload JSON/multipart (+SHA-256), antrean+backoff, merge-max+set difference, transformasi bbox.
-- [ ] Poin tidak pernah terhitung ganda (dibuktikan test finalisasi dua kali).
+- [ ] Poin tidak pernah terhitung ganda (dibuktikan test finalisasi dua kali) dan dihitung terpisah per kelas.
 - [ ] `.apk` release terpasang dan berjalan dengan backend lokal.
 - [ ] Ambang kecocokan telah dikalibrasi dengan data kelas nyata dan dicatat di README.
-
 ---
 
 ## 14. Asumsi dan Keterbatasan Versi 1
 
 | Hal | Keputusan v1 |
 |---|---|
-| Dua kelas | Daftar peserta sesi = semua mahasiswa terdaftar. Jika dipakai untuk 2 kelas berbeda, gunakan satu instance backend/database per kelas, atau tambahkan atribut kelas pada versi berikutnya. |
-| Keamanan | Tanpa autentikasi, hanya untuk jaringan lokal tepercaya. Data wajah (embedding dan foto) bersifat sensitif: jangan dipublikasikan, beri tahu mahasiswa tujuan penggunaannya. |
+| Sumber data mahasiswa | Roster diisi dosen (CSV atau manual) sebagai pengganti SIAKAD. Integrasi SIAKAD sungguhan ditunda, cukup mengganti sumber import. |
+| Banyak kelas | Ditangani lewat tabel `classes` dan roster many-to-many. Sesi, peserta, dan poin terikat pada kelas. Satu data wajah dipakai di semua kelas yang diikuti mahasiswa. |
+| Mengubah roster | v1 hanya menambah mahasiswa ke kelas. Menghapus atau memindahkan mahasiswa dari kelas belum didukung (ditunda ke versi berikutnya). Nama mahasiswa tidak diubah otomatis saat import (BR-15). |
+| Keamanan | Tanpa autentikasi, hanya untuk jaringan lokal tepercaya. Siapa pun yang tahu NIM dapat mendaftarkan wajah untuk NIM itu, dengan mitigasi: pendaftaran berlangsung di HP dosen dan daftar ulang memerlukan konfirmasi (BR-14). Data wajah (embedding dan foto) bersifat sensitif: jangan dipublikasikan, beri tahu mahasiswa tujuan penggunaannya. |
 | Anti-spoofing | Tidak ada deteksi foto/layar palsu (liveness). Di luar cakupan. |
 | Konfirmasi manual | Dihitung sama seperti hadir otomatis (+10). Dapat diubah di `points_service.py` bila aturan berubah. |
-| Registrasi di HP dosen | Asumsi. Jika kelak ada aplikasi terpisah untuk mahasiswa, kontrak API tidak perlu diubah. |
 | Kinerja | Inferensi CPU: capture dapat memakan beberapa detik. UI menampilkan indikator proses. |

@@ -2,14 +2,26 @@ from sqlalchemy import Column, Integer, String, Float, ForeignKey, LargeBinary
 from sqlalchemy.sql import func
 from app.database import Base
 
+class Class(Base):
+    __tablename__ = "classes"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, nullable=False)
+    code = Column(String, nullable=True)
+    created_at = Column(String, default=func.datetime('now'), nullable=False)
+
 class Student(Base):
     __tablename__ = "students"
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     nim = Column(String, unique=True, index=True, nullable=False)
     full_name = Column(String, nullable=False)
     has_faces = Column(Integer, default=0, nullable=False)
-    total_points = Column(Integer, default=0, nullable=False)
     created_at = Column(String, default=func.datetime('now'), nullable=False)
+
+class ClassStudent(Base):
+    __tablename__ = "class_students"
+    class_id = Column(Integer, ForeignKey("classes.id", ondelete="CASCADE"), primary_key=True)
+    student_id = Column(Integer, ForeignKey("students.id"), primary_key=True)
+    added_at = Column(String, default=func.datetime('now'), nullable=False)
 
 class FaceEmbedding(Base):
     __tablename__ = "face_embeddings"
@@ -23,6 +35,7 @@ class FaceEmbedding(Base):
 class Session(Base):
     __tablename__ = "sessions"
     id = Column(Integer, primary_key=True, autoincrement=True)
+    class_id = Column(Integer, ForeignKey("classes.id"), nullable=False)
     activity_name = Column(String, nullable=False)
     session_date = Column(String, nullable=False)
     session_time = Column(String, nullable=False)

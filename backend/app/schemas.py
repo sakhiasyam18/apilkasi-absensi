@@ -1,15 +1,19 @@
 from pydantic import BaseModel, Field
+from typing import List, Optional
 
-class StudentCreate(BaseModel):
-    full_name: str = Field(..., min_length=1)
-    nim: str = Field(..., pattern=r'^\d{12}$')
+class ClassInfo(BaseModel):
+    id: int
+    name: str
+    class Config:
+        from_attributes = True
 
 class StudentResponse(BaseModel):
     id: int
     nim: str
     full_name: str
     has_faces: bool
-    total_points: int
-
     class Config:
         from_attributes = True
+
+class StudentLookupResponse(StudentResponse):
+    classes: List[ClassInfo]
