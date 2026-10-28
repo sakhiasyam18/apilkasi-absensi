@@ -5,6 +5,9 @@ import '../features/classes/class_list_screen.dart';
 import '../features/classes/roster_screen.dart';
 import '../features/registration/lookup_screen.dart';
 import '../features/registration/capture_screen.dart';
+import '../features/attendance/attendance_screen.dart';
+import '../features/attendance/session_home_screen.dart';
+import '../features/attendance/models/session_model.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
@@ -38,6 +41,26 @@ final appRouter = GoRouter(
           studentName: extra['student_name'] as String? ?? '',
           nim: extra['nim'] as String? ?? '',
           overwrite: extra['overwrite'] as bool? ?? false,
+        );
+      },
+    ),
+    GoRoute(
+      path: '/attendance',
+      builder: (context, state) {
+        final classIdStr = state.uri.queryParameters['class_id'];
+        final classId = classIdStr != null ? int.tryParse(classIdStr) : null;
+        return AttendanceScreen(initialClassId: classId);
+      },
+    ),
+    GoRoute(
+      path: '/session/:id',
+      builder: (context, state) {
+        final idStr = state.pathParameters['id'] ?? '0';
+        final sessionId = int.tryParse(idStr) ?? 0;
+        final sessionExtra = state.extra is SessionData ? state.extra as SessionData : null;
+        return SessionHomeScreen(
+          sessionId: sessionId,
+          initialSession: sessionExtra,
         );
       },
     ),

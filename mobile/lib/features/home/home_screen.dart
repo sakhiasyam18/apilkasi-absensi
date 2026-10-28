@@ -25,45 +25,55 @@ class HomeScreen extends ConsumerWidget {
         ],
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: 16),
-              const Center(
-                child: Icon(Icons.school, size: 72, color: Colors.indigo),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Sistem Presensi Kelas Otomatis',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-              ),
               const SizedBox(height: 8),
-              const Text(
-                'Pengenalan Wajah Berbasis AI InsightFace & Google ML Kit',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey, fontSize: 13),
+              const Center(
+                child: Icon(Icons.school, size: 64, color: Colors.indigo),
               ),
-              const SizedBox(height: 36),
+              const SizedBox(height: 12),
+              const Text(
+                'Sistem Presensi Otomatis',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Pengenalan Wajah AI InsightFace & Google ML Kit',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey, fontSize: 12),
+              ),
+              const SizedBox(height: 24),
 
-              // Menu 1: Kelola Kelas & Roster
+              // Menu 1: Mulai Presensi Kelas (Primary)
+              _MenuCard(
+                icon: Icons.camera_enhance,
+                iconColor: Colors.deepPurple,
+                title: 'Mulai Presensi Kelas',
+                subtitle: 'Buka sesi baru untuk memotret kehadiran mahasiswa',
+                onTap: () => context.push('/attendance'),
+              ),
+              const SizedBox(height: 12),
+
+              // Menu 2: Kelola Kelas & Roster
               _MenuCard(
                 icon: Icons.meeting_room_outlined,
                 iconColor: Colors.indigo,
                 title: 'Manajemen Kelas & Roster',
-                subtitle: 'Daftar kelas, import CSV mahasiswa, dan riwayat presensi',
+                subtitle: 'Daftar kelas, import CSV mahasiswa, dan status wajah',
                 onTap: () => context.push('/classes'),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
 
-              // Menu 2: Registrasi Wajah
+              // Menu 3: Registrasi Wajah
               _MenuCard(
                 icon: Icons.face_retouching_natural,
                 iconColor: Colors.teal,
                 title: 'Registrasi Wajah Mahasiswa',
-                subtitle: 'Verifikasi NIM & panduan pengambilan 5 pose foto wajah',
+                subtitle: 'Verifikasi NIM & panduan pengambilan 5 pose foto',
                 onTap: () => context.push('/register'),
               ),
             ],
@@ -98,25 +108,25 @@ class _MenuCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(18.0),
+          padding: const EdgeInsets.all(16.0),
           child: Row(
             children: [
               CircleAvatar(
-                radius: 28,
+                radius: 26,
                 backgroundColor: iconColor.withValues(alpha: 0.12),
                 foregroundColor: iconColor,
-                child: Icon(icon, size: 30),
+                child: Icon(icon, size: 28),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       title,
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 3),
                     Text(
                       subtitle,
                       style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
@@ -124,7 +134,7 @@ class _MenuCard extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+              const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
             ],
           ),
         ),

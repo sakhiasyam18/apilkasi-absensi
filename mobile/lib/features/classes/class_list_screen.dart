@@ -16,44 +16,56 @@ class ClassListScreen extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
         title: const Row(
           children: [
             Icon(Icons.add_circle_outline, color: Colors.indigo),
             SizedBox(width: 8),
-            Text('Tambah Kelas Baru'),
+            Expanded(
+              child: Text(
+                'Tambah Kelas Baru',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Nama Kelas *',
-                  hintText: 'mis. Pemrograman Mobile A',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.school_outlined),
+        content: SingleChildScrollView(
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Nama Kelas *',
+                    hintText: 'mis. Pemrograman Mobile A',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.school_outlined),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  ),
+                  validator: (val) {
+                    if (val == null || val.trim().isEmpty) {
+                      return 'Nama kelas tidak boleh kosong';
+                    }
+                    return null;
+                  },
                 ),
-                validator: (val) {
-                  if (val == null || val.trim().isEmpty) {
-                    return 'Nama kelas tidak boleh kosong';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: codeController,
-                decoration: const InputDecoration(
-                  labelText: 'Kode Kelas (Opsional)',
-                  hintText: 'mis. PM-A',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.tag),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: codeController,
+                  decoration: const InputDecoration(
+                    labelText: 'Kode Kelas (Opsional)',
+                    hintText: 'mis. PM-A',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.tag),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
         actions: [
@@ -318,33 +330,46 @@ class _ClassCard extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.people_outline, size: 18, color: Colors.indigo),
-                      const SizedBox(width: 6),
-                      Text(
-                        '${cls.studentCount} Mahasiswa',
-                        style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.face,
-                        size: 18,
-                        color: cls.facesRegisteredCount > 0 ? Colors.green : Colors.grey,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        '${cls.facesRegisteredCount} Wajah Terdaftar',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w500,
-                          fontSize: 13,
-                          color: cls.facesRegisteredCount > 0 ? Colors.green.shade800 : Colors.grey.shade700,
+                  Flexible(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.people_outline, size: 18, color: Colors.indigo),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            '${cls.studentCount} Mahasiswa',
+                            style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.face,
+                          size: 18,
+                          color: cls.facesRegisteredCount > 0 ? Colors.green : Colors.grey,
+                        ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            '${cls.facesRegisteredCount} Wajah',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w500,
+                              fontSize: 13,
+                              color: cls.facesRegisteredCount > 0 ? Colors.green.shade800 : Colors.grey.shade700,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
