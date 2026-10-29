@@ -13,9 +13,9 @@ class SessionParticipantItem {
 
   factory SessionParticipantItem.fromJson(Map<String, dynamic> json) {
     return SessionParticipantItem(
-      studentId: json['student_id'] as int,
-      fullName: json['full_name'] as String,
-      nim: json['nim'] as String,
+      studentId: (json['student_id'] as num?)?.toInt() ?? 0,
+      fullName: json['full_name'] as String? ?? '',
+      nim: json['nim'] as String? ?? '',
       hasFaces: json['has_faces'] is bool
           ? json['has_faces'] as bool
           : (json['has_faces'] == 1),
@@ -56,11 +56,11 @@ class SessionData {
         .toList();
 
     return SessionData(
-      id: json['id'] as int,
-      classId: json['class_id'] as int,
-      activityName: json['activity_name'] as String,
-      sessionDate: json['session_date'] as String,
-      sessionTime: json['session_time'] as String,
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      classId: (json['class_id'] as num?)?.toInt() ?? 0,
+      activityName: json['activity_name'] as String? ?? '',
+      sessionDate: json['session_date'] as String? ?? '',
+      sessionTime: json['session_time'] as String? ?? '',
       meetingNumber: (json['meeting_number'] as num?)?.toInt() ?? 1,
       status: json['status'] as String? ?? 'active',
       captureCount: (json['capture_count'] as num?)?.toInt() ?? 0,

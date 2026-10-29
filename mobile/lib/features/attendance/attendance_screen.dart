@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/utils/error_utils.dart';
 import '../classes/data/classes_repository.dart';
 import '../classes/models/class_model.dart';
 import 'data/attendance_repository.dart';
@@ -146,10 +147,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
       // Navigasikan user ke halaman sesi presensi
       context.push('/session/${session.id}', extra: session);
     } on DioException catch (e) {
-      final errData = e.response?.data?['detail'];
-      final msg = errData is Map
-          ? (errData['message'] ?? errData['code'] ?? e.message)
-          : (errData ?? e.message ?? 'Gagal membuat sesi presensi');
+      final msg = ErrorUtils.getErrorMessage(e, 'Gagal membuat sesi presensi');
 
       if (mounted) {
         showDialog(

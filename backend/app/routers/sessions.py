@@ -61,6 +61,13 @@ def create_session(sess_input: SessionCreate, db: Session = Depends(get_db)):
         "id": new_sess.id,
         "class_id": new_sess.class_id,
         "activity_name": new_sess.activity_name,
+        "session_date": new_sess.session_date,
+        "session_time": new_sess.session_time,
+        "meeting_number": new_sess.meeting_number,
+        "status": new_sess.status,
+        "capture_count": new_sess.capture_count,
+        "max_captures": settings.max_captures_per_session,
+        "created_at": new_sess.created_at,
         "without_faces_count": without_faces_count,
         "participants": participants_info
     }

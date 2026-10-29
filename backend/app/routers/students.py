@@ -74,6 +74,7 @@ async def register_faces(
             embeddings.append((labels[index], valid_faces[0].det_score, valid_faces[0].normed_embedding))
             
     if errors:
+        print(f"[REGISTRATION ERROR] Face detection errors: {errors}")
         raise AppError(code="face_detection_error", message="Terjadi kesalahan pada deteksi foto", status_code=422, details=errors)
         
     # Hitung rata-rata Cosine Similarity dari kelima wajah untuk memastikan itu orang yang sama
@@ -84,6 +85,7 @@ async def register_faces(
             sims.append(sim)
     
     avg_sim = float(np.mean(sims))
+    print(f"[REGISTRATION] Face self-similarity avg: {avg_sim:.4f} (threshold: {settings.reg_min_self_similarity})")
     if avg_sim < settings.reg_min_self_similarity:
         raise AppError(code="inconsistent_faces", message="5 foto tampak bukan orang yang sama", status_code=422)
         

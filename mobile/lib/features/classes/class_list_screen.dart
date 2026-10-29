@@ -144,13 +144,13 @@ class ClassListScreen extends ConsumerWidget {
               return ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 children: [
-                  SizedBox(
-                    height: MediaQuery.of(context).size.height * 0.7,
-                    child: Center(
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 40.0),
                       child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.school_outlined, size: 80, color: Colors.grey.shade400),
+                          Icon(Icons.school_outlined, size: 72, color: Colors.grey.shade400),
                           const SizedBox(height: 16),
                           const Text(
                             'Belum Ada Kelas',
@@ -160,6 +160,7 @@ class ClassListScreen extends ConsumerWidget {
                           const Text(
                             'Tambahkan kelas baru untuk mulai mengelola roster',
                             style: TextStyle(color: Colors.grey),
+                            textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: 20),
                           ElevatedButton.icon(
@@ -198,45 +199,43 @@ class ClassListScreen extends ConsumerWidget {
             return ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               children: [
-                SizedBox(
-                  height: MediaQuery.of(context).size.height * 0.7,
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24.0),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.cloud_off, size: 64, color: Colors.redAccent),
-                          const SizedBox(height: 16),
-                          const Text(
-                            'Gagal Memuat Daftar Kelas',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            err.toString(),
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(color: Colors.grey, fontSize: 13),
-                          ),
-                          const SizedBox(height: 20),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              OutlinedButton.icon(
-                                icon: const Icon(Icons.refresh),
-                                label: const Text('Coba Lagi'),
-                                onPressed: () => ref.invalidate(classesListProvider),
-                              ),
-                              const SizedBox(width: 12),
-                              ElevatedButton.icon(
-                                icon: const Icon(Icons.settings),
-                                label: const Text('Pengaturan IP'),
-                                onPressed: () => context.push('/settings'),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.cloud_off, size: 60, color: Colors.redAccent),
+                        const SizedBox(height: 14),
+                        const Text(
+                          'Gagal Memuat Daftar Kelas',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          err.toString(),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.grey, fontSize: 13),
+                        ),
+                        const SizedBox(height: 20),
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: [
+                            OutlinedButton.icon(
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Coba Lagi'),
+                              onPressed: () => ref.invalidate(classesListProvider),
+                            ),
+                            ElevatedButton.icon(
+                              icon: const Icon(Icons.settings),
+                              label: const Text('Pengaturan IP'),
+                              onPressed: () => context.push('/settings'),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                 ),

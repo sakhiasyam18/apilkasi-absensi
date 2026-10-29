@@ -388,14 +388,15 @@ class RosterScreen extends ConsumerWidget {
                                   ],
                                 ),
                                 const SizedBox(height: 12),
-                                Row(
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
                                   children: [
                                     Chip(
                                       avatar: const Icon(Icons.people, size: 16, color: Colors.indigo),
                                       label: Text('${classDetail.students.length} / 15 Mahasiswa'),
                                       visualDensity: VisualDensity.compact,
                                     ),
-                                    const SizedBox(width: 8),
                                     Chip(
                                       avatar: const Icon(Icons.face, size: 16, color: Colors.green),
                                       label: Text('$registeredCount Wajah Terdaftar'),
