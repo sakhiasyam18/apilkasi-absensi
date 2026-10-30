@@ -1,5 +1,6 @@
 import os
 import hashlib
+import numpy as np
 from typing import Optional, List
 from fastapi import APIRouter, Depends, UploadFile, File, Form, Header
 from pydantic import BaseModel
@@ -141,6 +142,18 @@ async def recognize_attendance(
     bgr_image, (img_w, img_h) = load_for_recognition(content, settings.max_image_side)
     detected_faces = face_engine.face_app_instance.analyze(bgr_image)
     valid_faces = [f for f in detected_faces if f.det_score >= settings.min_det_score]
+
+    # Auto-rotation fallback jika orientasi foto miring
+    if not valid_faces:
+        for rot_k in [1, 2, 3]:
+            rotated = np.rot90(bgr_image, rot_k)
+            det_rot = face_engine.face_app_instance.analyze(rotated)
+            valid_rot = [f for f in det_rot if f.det_score >= (settings.min_det_score * 0.85)]
+            if valid_rot:
+                bgr_image = rotated
+                img_h, img_w = bgr_image.shape[:2]
+                valid_faces = valid_rot
+                break
 
     # 3. Muat Data Wajah Peserta Sesi (Roster)
     participants = (

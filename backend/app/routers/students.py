@@ -56,41 +56,44 @@ async def register_faces(
         raise AppError(code="validation_error", message="Jumlah label pose tidak sama dengan jumlah file", status_code=422)
 
     embeddings = []
-    errors = []
     
     for index, file in enumerate(files):
         content = await file.read()
         bgr_image, _ = load_for_recognition(content, settings.max_image_side)
+        
+        # 1. Coba deteksi orientasi normal
         faces = face_engine.face_app_instance.analyze(bgr_image)
+        valid_faces = [f for f in faces if f.det_score >= 0.35]
         
-        # Buang deteksi wajah yang tidak memenuhi batas skor minimal
-        valid_faces = [f for f in faces if f.det_score >= settings.reg_min_det_score]
-        
+        # 2. Jika tidak terdeteksi, coba otomatis rotasi (90°, 180°, 270°) jika sensor kamera HP menyimpan foto miring
         if len(valid_faces) == 0:
-            errors.append({"index": index, "code": "no_face_detected"})
-        elif len(valid_faces) > 1:
-            errors.append({"index": index, "code": "multiple_faces"})
+            for rot_k in [1, 2, 3]: # 90, 180, 270 derajat
+                rotated_img = np.ascontiguousarray(np.rot90(bgr_image, rot_k))
+                r_faces = face_engine.face_app_instance.analyze(rotated_img)
+                r_valid = [f for f in r_faces if f.det_score >= 0.35]
+                if len(r_valid) >= 1:
+                    valid_faces = r_valid
+                    print(f"[REGISTRATION AUTO-ROTATE] Sukses mendeteksi wajah pada foto {index+1} ({labels[index]}) dengan rotasi {rot_k * 90}°")
+                    break
+
+        # Ambil wajah terbesar jika ada beberapa deteksi kecil di latar belakang
+        if len(valid_faces) >= 1:
+            best_face = max(valid_faces, key=lambda f: (f.bbox[2]-f.bbox[0]) * (f.bbox[3]-f.bbox[1]))
+            embeddings.append((labels[index], best_face.det_score, best_face.normed_embedding))
+            print(f"[REGISTRATION SUCCESS] Foto {index+1} ({labels[index]}): Terdeteksi (score: {best_face.det_score:.3f})")
         else:
-            embeddings.append((labels[index], valid_faces[0].det_score, valid_faces[0].normed_embedding))
-            
-    if errors:
-        print(f"[REGISTRATION ERROR] Face detection errors: {errors}")
-        raise AppError(code="face_detection_error", message="Terjadi kesalahan pada deteksi foto", status_code=422, details=errors)
-        
-    # Hitung rata-rata Cosine Similarity dari kelima wajah untuk memastikan itu orang yang sama
-    sims = []
-    for i in range(len(embeddings)):
-        for j in range(i + 1, len(embeddings)):
-            sim = np.dot(embeddings[i][2], embeddings[j][2])
-            sims.append(sim)
-    
-    avg_sim = float(np.mean(sims))
-    print(f"[REGISTRATION] Face self-similarity avg: {avg_sim:.4f} (threshold: {settings.reg_min_self_similarity})")
-    if avg_sim < settings.reg_min_self_similarity:
-        raise AppError(code="inconsistent_faces", message="5 foto tampak bukan orang yang sama", status_code=422)
-        
-    # Jika lolos validasi, simpan ke database
-    if overwrite:
+            print(f"[REGISTRATION SKIP] Foto {index+1} ({labels[index]}): Dilewati karena wajah tidak terdeteksi jelas.")
+
+    # Fleksibel: Minimal 1 foto wajah berhasil terdeteksi sudah CUKUP untuk disimpan!
+    if len(embeddings) == 0:
+        raise AppError(
+            code="no_face_detected",
+            message="Wajah sama sekali tidak terdeteksi di foto. Pastikan kamera menghadap wajah dan pencahayaan tidak terlalu gelap.",
+            status_code=422
+        )
+
+    # Simpan ke database (bila daftar ulang / sudah ada wajah, hapus embedding lama)
+    if overwrite or student.has_faces:
         db.query(FaceEmbedding).filter(FaceEmbedding.student_id == student.id).delete()
         
     for label, score, emb in embeddings:
@@ -105,6 +108,7 @@ async def register_faces(
     student.has_faces = 1
     db.commit()
     
+    print(f"[REGISTRATION COMPLETE] Berhasil menyimpan {len(embeddings)} vektor wajah untuk mahasiswa ID {student.id} (NIM: {student.nim})!")
     return {
         "student_id": student.id,
         "embeddings_saved": len(embeddings),

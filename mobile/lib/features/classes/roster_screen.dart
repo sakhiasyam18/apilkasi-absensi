@@ -91,7 +91,7 @@ class RosterScreen extends ConsumerWidget {
               children: [
                 Icon(Icons.error_outline, color: Colors.red),
                 SizedBox(width: 8),
-                Text('Gagal Import CSV'),
+                Expanded(child: Text('Gagal Import CSV')),
               ],
             ),
             content: Text(msg.toString()),
@@ -122,7 +122,7 @@ class RosterScreen extends ConsumerWidget {
           children: [
             Icon(Icons.check_circle, color: Colors.green),
             SizedBox(width: 8),
-            Text('Ringkasan Import Roster'),
+            Expanded(child: Text('Ringkasan Import Roster')),
           ],
         ),
         content: SingleChildScrollView(
@@ -216,7 +216,7 @@ class RosterScreen extends ConsumerWidget {
           children: [
             Icon(Icons.person_add_alt_1, color: Colors.indigo),
             SizedBox(width: 8),
-            Text('Tambah Mahasiswa'),
+            Expanded(child: Text('Tambah Mahasiswa')),
           ],
         ),
         content: Form(

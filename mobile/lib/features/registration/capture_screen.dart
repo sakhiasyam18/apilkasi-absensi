@@ -1,11 +1,15 @@
 import 'dart:async';
 import 'package:camera/camera.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
+import 'package:path/path.dart' as p;
 
+import '../../core/api/api_client.dart';
+import '../../core/utils/error_utils.dart';
 import '../../core/utils/image_prep.dart';
 import '../../core/utils/image_quality.dart';
 import '../../services/upload_queue/queue_worker.dart';
@@ -32,35 +36,35 @@ final List<PoseTarget> kPoseTargets = [
     title: '1. Hadap Depan',
     instruction: 'Posisikan wajah lurus menghadap kamera',
     icon: Icons.face,
-    isMatch: (yaw, pitch) => yaw.abs() <= 10 && pitch.abs() <= 10,
+    isMatch: (yaw, pitch) => yaw.abs() <= 16 && pitch.abs() <= 16,
   ),
   PoseTarget(
     label: 'kiri',
     title: '2. Tengok Kiri',
     instruction: 'Tengokkan kepala sedikit ke kiri',
     icon: Icons.turn_left,
-    isMatch: (yaw, pitch) => (yaw >= -35 && yaw <= -12) || (yaw >= 12 && yaw <= 35),
+    isMatch: (yaw, pitch) => (yaw >= -45 && yaw <= -8) || (yaw >= 8 && yaw <= 45),
   ),
   PoseTarget(
     label: 'kanan',
     title: '3. Tengok Kanan',
     instruction: 'Tengokkan kepala sedikit ke kanan',
     icon: Icons.turn_right,
-    isMatch: (yaw, pitch) => (yaw >= 12 && yaw <= 35) || (yaw >= -35 && yaw <= -12),
+    isMatch: (yaw, pitch) => (yaw >= 8 && yaw <= 45) || (yaw >= -45 && yaw <= -8),
   ),
   PoseTarget(
     label: 'atas',
     title: '4. Angkat Dagu',
     instruction: 'Angkat dagu sedikit ke atas',
     icon: Icons.arrow_upward,
-    isMatch: (yaw, pitch) => (pitch >= 10 && pitch <= 25 && yaw.abs() <= 15) || (pitch <= -10 && pitch >= -25 && yaw.abs() <= 15),
+    isMatch: (yaw, pitch) => (pitch >= 6 && pitch <= 35 && yaw.abs() <= 25) || (pitch <= -6 && pitch >= -35 && yaw.abs() <= 25),
   ),
   PoseTarget(
     label: 'bawah',
     title: '5. Tunduk Sedikit',
     instruction: 'Tundukkan kepala sedikit ke bawah',
     icon: Icons.arrow_downward,
-    isMatch: (yaw, pitch) => (pitch <= -10 && pitch >= -25 && yaw.abs() <= 15) || (pitch >= 10 && pitch <= 25 && yaw.abs() <= 15),
+    isMatch: (yaw, pitch) => (pitch <= -6 && pitch >= -35 && yaw.abs() <= 25) || (pitch >= 6 && pitch <= 35 && yaw.abs() <= 25),
   ),
 ];
 
@@ -196,8 +200,8 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
         yaw = face.headEulerAngleY ?? 0.0;
         pitch = face.headEulerAngleX ?? 0.0;
 
-        // Lebar bbox wajah >= 25% lebar frame
-        final minWidth = image.width * 0.25;
+        // Lebar bbox wajah >= 18% lebar frame
+        final minWidth = image.width * 0.18;
         largeEnough = face.boundingBox.width >= minWidth;
 
         if (!largeEnough) {
@@ -363,9 +367,8 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
       ),
     );
 
+    final List<String> compressedPaths = [];
     try {
-      final List<String> compressedPaths = [];
-
       for (final rawPath in _capturedRawPaths) {
         final compressed = await ImagePrep.compressAndHashFile(rawPath, saveToDisk: true);
         if (compressed.savedPath != null) {
@@ -373,13 +376,21 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
         }
       }
 
-      // Masukkan ke antrean upload (Langkah 3)
-      final queueWorker = ref.read(queueWorkerProvider);
-      await queueWorker.enqueueFaces(
-        studentId: widget.studentId,
-        filePaths: compressedPaths,
-        poseLabels: 'depan,kiri,kanan,atas,bawah',
-        overwrite: widget.overwrite,
+      // Coba kirim langsung ke server agar user mendapat konfirmasi verifikasi AI secara real-time
+      final dio = ref.read(apiClientProvider);
+      final formData = FormData();
+      for (final filePath in compressedPaths) {
+        formData.files.add(MapEntry(
+          'files',
+          await MultipartFile.fromFile(filePath, filename: p.basename(filePath)),
+        ));
+      }
+      formData.fields.add(const MapEntry('pose_labels', 'depan,kiri,kanan,atas,bawah'));
+
+      await dio.post(
+        '/students/${widget.studentId}/faces',
+        data: formData,
+        queryParameters: {'overwrite': widget.overwrite},
       );
 
       if (mounted) {
@@ -393,12 +404,12 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
               children: [
                 Icon(Icons.check_circle, color: Colors.green),
                 SizedBox(width: 8),
-                Text('Pendaftaran Selesai!'),
+                Expanded(child: Text('Wajah Berhasil Disimpan!')),
               ],
             ),
             content: Text(
-              'Kelima foto wajah untuk "${widget.studentName}" berhasil diambil dan dikompres.\n\n'
-              'Data telah dimasukkan ke dalam antrean sinkronisasi latar belakang ke server.',
+              'Kelima foto wajah untuk "${widget.studentName}" telah berhasil diverifikasi oleh AI InsightFace dan tersimpan di database server.\n\n'
+              'Mahasiswa ini sekarang siap dideteksi otomatis (kotak hijau) saat presensi kelas.',
             ),
             actions: [
               ElevatedButton(
@@ -411,6 +422,89 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
                   context.go('/');
                 },
                 child: const Text('Kembali ke Beranda'),
+              ),
+            ],
+          ),
+        );
+      }
+    } on DioException catch (e) {
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop(); // Tutup loading
+
+      final isNetworkError = e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.connectionError ||
+          e.type == DioExceptionType.sendTimeout ||
+          e.type == DioExceptionType.receiveTimeout;
+
+      if (isNetworkError) {
+        // Fallback ke antrean latar belakang jika offline
+        final queueWorker = ref.read(queueWorkerProvider);
+        await queueWorker.enqueueFaces(
+          studentId: widget.studentId,
+          filePaths: compressedPaths,
+          poseLabels: 'depan,kiri,kanan,atas,bawah',
+          overwrite: widget.overwrite,
+        );
+
+        if (!mounted) return;
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.wifi_off, color: Colors.orange),
+                SizedBox(width: 8),
+                Expanded(child: Text('Tersimpan di Antrean Offline')),
+              ],
+            ),
+            content: Text(
+              'Koneksi ke server terputus. Kelima foto wajah "${widget.studentName}" telah disimpan di antrean HP dan akan disinkronkan otomatis saat server online.',
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  context.go('/');
+                },
+                child: const Text('Kembali ke Beranda'),
+              ),
+            ],
+          ),
+        );
+      } else {
+        // Error validasi dari AI Server (misal 422: salah satu pose tidak terdeteksi)
+        final msg = ErrorUtils.getErrorMessage(e, 'Gagal memverifikasi wajah');
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.red),
+                SizedBox(width: 8),
+                Expanded(child: Text('Verifikasi AI Gagal')),
+              ],
+            ),
+            content: Text(msg),
+            actions: [
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.indigo,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  // Reset pose agar bisa ambil ulang
+                  setState(() {
+                    _currentPoseIndex = 0;
+                    _capturedRawPaths.clear();
+                    _isCapturing = false;
+                    _isPoseAligned = false;
+                  });
+                  _cameraController?.startImageStream(_processCameraFrame);
+                },
+                child: const Text('Ambil Ulang Foto'),
               ),
             ],
           ),
@@ -581,24 +675,31 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
                   ),
                 ),
 
-                // 5. Bottom Controls (Shutter Button)
+                // 5. Bottom Controls (Shutter Button - otomatis atau manual)
                 Positioned(
                   bottom: 30,
                   left: 0,
                   right: 0,
                   child: Center(
                     child: GestureDetector(
-                      onTap: (_isCapturing || !isAligned) ? null : _takePhoto,
+                      onTap: _isCapturing ? null : _takePhoto,
                       child: Container(
                         width: 76,
                         height: 76,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: isAligned ? Colors.greenAccent : Colors.white38,
+                            color: isAligned ? Colors.greenAccent : Colors.white70,
                             width: 4,
                           ),
-                          color: isAligned ? Colors.white : Colors.white24,
+                          color: isAligned ? Colors.greenAccent.shade100 : Colors.white,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.3),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                         ),
                         child: Center(
                           child: _isCapturing
@@ -610,7 +711,7 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
                               : Icon(
                                   Icons.camera_alt,
                                   size: 36,
-                                  color: isAligned ? Colors.indigo : Colors.white38,
+                                  color: isAligned ? Colors.green.shade900 : Colors.indigo,
                                 ),
                         ),
                       ),

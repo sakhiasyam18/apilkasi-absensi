@@ -130,6 +130,13 @@ class _AttendanceCameraScreenState
     } catch (_) {}
   }
 
+  Future<void> _switchCamera() async {
+    if (_cameras.length < 2 || _isProcessing) return;
+    final nextIndex = (_selectedCameraIndex + 1) % _cameras.length;
+    _selectedCameraIndex = nextIndex;
+    await _startController(_cameras[_selectedCameraIndex]);
+  }
+
   Future<void> _takeAttendancePhoto() async {
     if (_controller == null ||
         !_controller!.value.isInitialized ||
@@ -244,6 +251,11 @@ class _AttendanceCameraScreenState
             ),
             tooltip: 'Lampu Kilat',
             onPressed: _toggleFlash,
+          ),
+          IconButton(
+            icon: const Icon(Icons.flip_camera_android),
+            tooltip: 'Ganti Kamera',
+            onPressed: _switchCamera,
           ),
         ],
       ),

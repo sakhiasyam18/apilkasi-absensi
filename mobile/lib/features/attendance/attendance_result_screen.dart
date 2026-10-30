@@ -319,7 +319,7 @@ class _AttendanceResultScreenState
           children: [
             Icon(Icons.lock_clock, color: Colors.indigo),
             SizedBox(width: 8),
-            Text('Selesaikan Presensi?'),
+            Expanded(child: Text('Selesaikan Presensi?')),
           ],
         ),
         content: Column(

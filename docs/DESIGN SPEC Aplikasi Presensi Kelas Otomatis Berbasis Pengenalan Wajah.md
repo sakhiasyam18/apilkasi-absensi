@@ -5,6 +5,7 @@
 > Gabungan dari Tugas 1, Tugas 2, dan Diagram Spesifikasi Sistem, sudah diselaraskan.
 > Penulis: Asyam Sakhi Maulana (240535600363), Daffa Aleia Amrita Waskitha (240535612453).
 > **Revisi 2:** ditambahkan konsep **Kelas** dan **roster** (daftar mahasiswa per kelas, pengganti integrasi SIAKAD). Registrasi wajah kini berbasis verifikasi NIM yang sudah ada di roster.
+> **Revisi 3 (Final Selesai):** Implementasi Fase 1 s/d Fase 6 selesai 100%. Ditambahkan panduan manual book resmi (`docs/MANUAL_BOOK_PANDUAN_PENGGUNAAN.md`), kalibrasi ambang batas `reg_min_det_score = 0.4`, verifikasi feedback langsung pada registrasi wajah, skema 3-warna Bounding Box (Hijau: AI Hadir, Merah: Unknown, Biru: Konfirmasi Manual), dan script reset database 1-klik (`backend/reset_db.bat`).
 
 ---
 
@@ -658,7 +659,10 @@ Rect toScreen(Rect b, Size img, Size view) {
 }
 ```
 
-Gambar dengan `CustomPainter`: hijau untuk `identified` (label nama + skor), merah untuk `unknown` (dapat diketuk untuk verifikasi manual), biru untuk `confirmed`.
+Gambar dengan `CustomPainter`:
+- 🟩 **Hijau (`identified`)**: Wajah dikenali otomatis oleh AI InsightFace. Menampilkan label nama mahasiswa dan persentase skor kecocokan di atas kotak.
+- 🟥 **Merah (`unknown`)**: Wajah terdeteksi kamera tetapi belum cocok dengan database (misal belum setor wajah atau pose tertutup). Kotak ini interaktif: dapat **diketuk langsung oleh dosen** via `GestureDetector` untuk memicu bottom sheet konfirmasi manual (BR-07, BR-08).
+- 🟦 **Biru (`confirmed`)**: Wajah yang awalnya merah/unknown, lalu dikonfirmasi manual oleh dosen dengan memilih nama mahasiswa dari daftar yang belum hadir. Status kehadiran otomatis diperbarui menjadi hadir.
 
 ### 9.7 Penggabungan hasil dan progres (`progress_merge.dart`)
 

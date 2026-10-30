@@ -5,9 +5,9 @@ class Settings(BaseSettings):
     storage_dir: str = "./storage"
     model_name: str = "buffalo_l"
     det_size: int = 1280
-    min_det_score: float = 0.5
+    min_det_score: float = 0.40
     max_image_side: int = 1920
-    reg_min_det_score: float = 0.6
+    reg_min_det_score: float = 0.4
     reg_min_self_similarity: float = 0.30
     registration_photos: int = 5
     match_threshold: float = 0.40
