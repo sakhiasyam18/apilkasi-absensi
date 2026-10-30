@@ -10,8 +10,12 @@ __pycache__/
 # Storage captures
 backend/storage/
 
-# Screenshots & temporary dumps
+# Screenshots & temporary dumps (except documentation assets)
 *.png
 *.jpg
 *.jpeg
 FlutterSharedPreferences.xml
+
+# Allow documentation screenshots
+!docs/images/
+!docs/images/*
