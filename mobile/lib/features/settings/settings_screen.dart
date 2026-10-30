@@ -67,11 +67,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             const SizedBox(height: 8),
             TextField(
               controller: _urlController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'URL Server Backend',
-                hintText: 'http://127.0.0.1:8000',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.dns_outlined),
+                hintText: 'http://192.168.61.85:8000',
+                border: const OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.dns_outlined),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.clear),
+                  onPressed: () => _urlController.clear(),
+                ),
               ),
             ),
             const SizedBox(height: 16),
@@ -97,7 +101,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               child: ListTile(
                 leading: const Icon(Icons.usb, color: Colors.indigo),
-                title: const Text('Koneksi USB (Direkomendasikan)', style: TextStyle(fontWeight: FontWeight.bold)),
+                title: const Text('Koneksi USB (127.0.0.1)', style: TextStyle(fontWeight: FontWeight.bold)),
                 subtitle: const Text('http://127.0.0.1:8000 (Via ADB Reverse USB)'),
                 trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                 onTap: () {
@@ -109,15 +113,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             const SizedBox(height: 8),
             Card(
               elevation: 0,
-              color: Colors.grey.shade100,
+              color: Colors.green.shade50,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               child: ListTile(
-                leading: const Icon(Icons.wifi, color: Colors.blueGrey),
-                title: const Text('Koneksi Wi-Fi Lokal', style: TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: const Text('http://10.123.42.1:8000 (IP Wi-Fi Laptop)'),
+                leading: const Icon(Icons.wifi, color: Colors.green),
+                title: const Text('Koneksi Hotspot Wi-Fi (Aktif)', style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: const Text('http://192.168.61.85:8000 (IP Laptop)'),
                 trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                 onTap: () {
-                  _urlController.text = 'http://10.123.42.1:8000';
+                  _urlController.text = 'http://192.168.61.85:8000';
                   _testConnection();
                 },
               ),

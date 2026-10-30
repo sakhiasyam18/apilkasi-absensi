@@ -1,0 +1,17 @@
+# Environments
+.venv/
+__pycache__/
+*.pyc
+
+# Database temporary files
+*.db-shm
+*.db-wal
+
+# Storage captures
+backend/storage/
+
+# Screenshots & temporary dumps
+*.png
+*.jpg
+*.jpeg
+FlutterSharedPreferences.xml
