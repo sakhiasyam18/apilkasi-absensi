@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'data/classes_repository.dart';
 import 'models/class_model.dart';
 
@@ -327,6 +328,13 @@ class RosterScreen extends ConsumerWidget {
         title: const Text('Roster Kelas'),
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.emoji_events),
+            tooltip: 'Papan Peringkat Poin',
+            onPressed: () => context.push('/classes/$classId/points'),
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: () async {
