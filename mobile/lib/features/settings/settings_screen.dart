@@ -69,7 +69,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               controller: _urlController,
               decoration: InputDecoration(
                 labelText: 'URL Server Backend',
-                hintText: 'http://192.168.61.85:8000',
+                hintText: 'http://192.168.1.x:8000',
                 border: const OutlineInputBorder(),
                 prefixIcon: const Icon(Icons.dns_outlined),
                 suffixIcon: IconButton(
@@ -117,11 +117,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               child: ListTile(
                 leading: const Icon(Icons.wifi, color: Colors.green),
-                title: const Text('Koneksi Hotspot Wi-Fi (Aktif)', style: TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: const Text('http://192.168.61.85:8000 (IP Laptop)'),
+                title: const Text('Koneksi Wi-Fi Lokal / LAN', style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: const Text('http://192.168.x.x:8000 (Sesuaikan IP Wi-Fi Laptop)'),
                 trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                 onTap: () {
-                  _urlController.text = 'http://192.168.61.85:8000';
+                  if (!_urlController.text.startsWith('http://192.168.')) {
+                    _urlController.text = 'http://192.168.1.100:8000';
+                  }
                   _testConnection();
                 },
               ),
