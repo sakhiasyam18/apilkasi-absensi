@@ -19,3 +19,8 @@ FlutterSharedPreferences.xml
 # Allow documentation screenshots
 !docs/images/
 !docs/images/*
+
+# Android Build outputs
+build_apk/
+*.apk
+
