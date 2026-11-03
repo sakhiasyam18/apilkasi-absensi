@@ -60,6 +60,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  void _handleQuickMahasiswaLogin() async {
+    await ref.read(authProvider.notifier).loginAsDefaultMahasiswa();
+    if (mounted) {
+      context.go('/');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
@@ -268,6 +275,56 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                       ),
                       const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: AppColors.primaryLight),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Quick Login Demo Button for Mahasiswa (Allen Sebastian)
+                LuxuryCard(
+                  onTap: authState.isLoading ? null : _handleQuickMahasiswaLogin,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  backgroundColor: AppColors.hadir.withValues(alpha: 0.08),
+                  border: Border.all(color: AppColors.hadir.withValues(alpha: 0.3), width: 1),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.hadir.withValues(alpha: 0.18),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.school_rounded,
+                          color: AppColors.hadir,
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Masuk Cepat: Allen Sebastian',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Role Mahasiswa • NIM 240535678149',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: AppColors.hadir),
                     ],
                   ),
                 ),

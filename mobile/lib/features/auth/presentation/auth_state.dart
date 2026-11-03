@@ -71,6 +71,21 @@ class AuthNotifier extends Notifier<AuthState> {
     }
   }
 
+  Future<void> loginAsDefaultMahasiswa() async {
+    state = state.copyWith(isLoading: true, errorMessage: null);
+    try {
+      final user = await _repo.login(
+        email: 'allen.sebastian@um.ac.id',
+        password: 'password123',
+      );
+      state = state.copyWith(user: user, isLoading: false);
+    } catch (_) {
+      final fallbackUser = UserModel.defaultMahasiswa();
+      await _repo.saveUser(fallbackUser);
+      state = state.copyWith(user: fallbackUser, isLoading: false);
+    }
+  }
+
   Future<bool> register({
     required String email,
     required String password,

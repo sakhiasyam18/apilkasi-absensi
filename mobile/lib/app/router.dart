@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../features/home/home_screen.dart';
 import '../features/settings/settings_screen.dart';
@@ -11,16 +13,34 @@ import '../features/attendance/attendance_camera_screen.dart';
 import '../features/attendance/attendance_result_screen.dart';
 import '../features/attendance/class_points_screen.dart';
 import '../features/attendance/models/session_model.dart';
+import '../features/auth/presentation/auth_state.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/register_screen.dart';
 import '../features/dosen/dosen_main_shell.dart';
+import '../features/mahasiswa/mahasiswa_main_shell.dart';
+import '../features/mahasiswa/screens/mahasiswa_account_screen.dart';
+
+class RoleRouter extends ConsumerWidget {
+  const RoleRouter({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(authProvider);
+    final user = authState.user;
+
+    if (user != null && user.isMahasiswa) {
+      return const MahasiswaMainShell();
+    }
+    return const DosenMainShell();
+  }
+}
 
 final appRouter = GoRouter(
   initialLocation: '/',
   routes: [
     GoRoute(
       path: '/',
-      builder: (context, state) => const DosenMainShell(),
+      builder: (context, state) => const RoleRouter(),
     ),
     GoRoute(
       path: '/login',
@@ -33,6 +53,14 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/dosen',
       builder: (context, state) => const DosenMainShell(),
+    ),
+    GoRoute(
+      path: '/mahasiswa',
+      builder: (context, state) => const MahasiswaMainShell(),
+    ),
+    GoRoute(
+      path: '/mahasiswa/account',
+      builder: (context, state) => const MahasiswaAccountScreen(),
     ),
     GoRoute(
       path: '/home-v1',

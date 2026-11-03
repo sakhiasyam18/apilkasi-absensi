@@ -50,4 +50,15 @@ class UserModel {
       programStudy: 'S1 Teknik Informatika - Universitas Negeri Malang',
     );
   }
+
+  static UserModel defaultMahasiswa() {
+    return UserModel(
+      id: 2,
+      email: 'allen.sebastian@um.ac.id',
+      fullName: 'Allen Sebastian',
+      identifier: '240535678149',
+      role: 'mahasiswa',
+      programStudy: 'S1 Teknik Informatika',
+    );
+  }
 }

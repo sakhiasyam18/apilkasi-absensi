@@ -51,6 +51,12 @@ class StatusBadge extends StatelessWidget {
         label = 'Wajah Terdaftar';
         icon = Icons.face_retouching_natural;
         break;
+      case 'upcoming':
+      case 'akan datang':
+        baseColor = AppColors.textMuted;
+        label = 'Akan Datang';
+        icon = Icons.schedule_rounded;
+        break;
       default:
         baseColor = AppColors.textMuted;
         label = status;
