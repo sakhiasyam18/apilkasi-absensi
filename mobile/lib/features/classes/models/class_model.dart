@@ -2,6 +2,9 @@ class ClassItem {
   final int id;
   final String name;
   final String? code;
+  final String? room;
+  final String? scheduleDay;
+  final String? scheduleTime;
   final int studentCount;
   final int facesRegisteredCount;
 
@@ -9,6 +12,9 @@ class ClassItem {
     required this.id,
     required this.name,
     this.code,
+    this.room,
+    this.scheduleDay,
+    this.scheduleTime,
     required this.studentCount,
     required this.facesRegisteredCount,
   });
@@ -18,6 +24,9 @@ class ClassItem {
       id: json['id'] as int,
       name: json['name'] as String,
       code: json['code'] as String?,
+      room: json['room'] as String?,
+      scheduleDay: json['schedule_day'] as String?,
+      scheduleTime: json['schedule_time'] as String?,
       studentCount: (json['student_count'] as num?)?.toInt() ?? 0,
       facesRegisteredCount: (json['faces_registered_count'] as num?)?.toInt() ?? 0,
     );
@@ -53,6 +62,9 @@ class ClassDetail {
   final int id;
   final String name;
   final String? code;
+  final String? room;
+  final String? scheduleDay;
+  final String? scheduleTime;
   final int studentCount;
   final List<StudentItem> students;
 
@@ -60,6 +72,9 @@ class ClassDetail {
     required this.id,
     required this.name,
     this.code,
+    this.room,
+    this.scheduleDay,
+    this.scheduleTime,
     required this.studentCount,
     required this.students,
   });
@@ -70,6 +85,9 @@ class ClassDetail {
       id: json['id'] as int,
       name: json['name'] as String,
       code: json['code'] as String?,
+      room: json['room'] as String?,
+      scheduleDay: json['schedule_day'] as String?,
+      scheduleTime: json['schedule_time'] as String?,
       studentCount: (json['student_count'] as num?)?.toInt() ?? list.length,
       students: list
           .map((item) => StudentItem.fromJson(item as Map<String, dynamic>))

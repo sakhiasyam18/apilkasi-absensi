@@ -11,8 +11,8 @@ class SettingsRepository {
   final SharedPreferences _prefs;
   SettingsRepository(this._prefs);
 
-  // Default ke localhost jika dijalankan di Web/Chrome
-  String get baseUrl => _prefs.getString('backend_base_url') ?? 'http://127.0.0.1:8000';
+  // Default ke IP Wi-Fi PC user jika belum di-set
+  String get baseUrl => _prefs.getString('backend_base_url') ?? 'http://192.168.1.32:8000';
   
   Future<void> setBaseUrl(String url) async {
     if (url.endsWith('/')) url = url.substring(0, url.length - 1);

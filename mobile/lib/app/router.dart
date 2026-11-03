@@ -11,12 +11,31 @@ import '../features/attendance/attendance_camera_screen.dart';
 import '../features/attendance/attendance_result_screen.dart';
 import '../features/attendance/class_points_screen.dart';
 import '../features/attendance/models/session_model.dart';
+import '../features/auth/presentation/login_screen.dart';
+import '../features/auth/presentation/register_screen.dart';
+import '../features/dosen/dosen_main_shell.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
   routes: [
     GoRoute(
       path: '/',
+      builder: (context, state) => const DosenMainShell(),
+    ),
+    GoRoute(
+      path: '/login',
+      builder: (context, state) => const LoginScreen(),
+    ),
+    GoRoute(
+      path: '/register-flow',
+      builder: (context, state) => const RegisterScreen(),
+    ),
+    GoRoute(
+      path: '/dosen',
+      builder: (context, state) => const DosenMainShell(),
+    ),
+    GoRoute(
+      path: '/home-v1',
       builder: (context, state) => const HomeScreen(),
     ),
     GoRoute(

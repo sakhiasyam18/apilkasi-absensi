@@ -83,7 +83,10 @@ class ClassListScreen extends ConsumerWidget {
                 Navigator.of(ctx).pop();
                 try {
                   final repo = ref.read(classesRepositoryProvider);
-                  await repo.createClass(nameController.text, codeController.text);
+                  await repo.createClass(
+                    name: nameController.text,
+                    code: codeController.text,
+                  );
                   ref.invalidate(classesListProvider);
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(

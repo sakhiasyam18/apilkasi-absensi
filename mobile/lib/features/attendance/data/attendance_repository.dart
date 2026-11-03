@@ -15,6 +15,16 @@ final sessionDetailProvider =
   return repo.getSessionDetail(sessionId);
 });
 
+final sessionsListProvider = FutureProvider.autoDispose.family<List<SessionData>, int?>((ref, classId) async {
+  final repo = ref.watch(attendanceRepositoryProvider);
+  return repo.getSessions(classId: classId);
+});
+
+final allSessionsProvider = FutureProvider.autoDispose<List<SessionData>>((ref) async {
+  final repo = ref.watch(attendanceRepositoryProvider);
+  return repo.getSessions();
+});
+
 final classPointsProvider = FutureProvider.autoDispose
     .family<List<StudentPointItem>, int>((ref, classId) async {
   final repo = ref.watch(attendanceRepositoryProvider);
@@ -25,6 +35,15 @@ class AttendanceRepository {
   final Dio _dio;
 
   AttendanceRepository(this._dio);
+
+  Future<List<SessionData>> getSessions({int? classId}) async {
+    final response = await _dio.get(
+      '/sessions',
+      queryParameters: classId != null ? {'class_id': classId} : null,
+    );
+    final list = response.data as List<dynamic>;
+    return list.map((e) => SessionData.fromJson(e as Map<String, dynamic>)).toList();
+  }
 
   Future<SessionData> createSession({
     required int classId,

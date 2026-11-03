@@ -29,10 +29,19 @@ class ClassesRepository {
     return list.map((item) => ClassItem.fromJson(item as Map<String, dynamic>)).toList();
   }
 
-  Future<ClassItem> createClass(String name, String? code) async {
+  Future<ClassItem> createClass({
+    required String name,
+    String? code,
+    String? room,
+    String? scheduleDay,
+    String? scheduleTime,
+  }) async {
     final response = await _dio.post('/classes', data: {
       'name': name.trim(),
       if (code != null && code.trim().isNotEmpty) 'code': code.trim(),
+      if (room != null && room.trim().isNotEmpty) 'room': room.trim(),
+      if (scheduleDay != null && scheduleDay.trim().isNotEmpty) 'schedule_day': scheduleDay.trim(),
+      if (scheduleTime != null && scheduleTime.trim().isNotEmpty) 'schedule_time': scheduleTime.trim(),
     });
     return ClassItem.fromJson(response.data as Map<String, dynamic>);
   }

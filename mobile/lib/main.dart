@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'app/router.dart';
 import 'core/config/settings_repository.dart';
+import 'core/theme/app_theme.dart';
 
 void main() async {
   // Wajib dipanggil sebelum inisialisasi plugin native (seperti SharedPreferences)
@@ -29,12 +30,10 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'Aplikasi Presensi',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        useMaterial3: true,
-      ),
-      routerConfig: appRouter, // Hubungkan MaterialApp dengan go_router
+      title: 'SnapAttend',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.darkTheme,
+      routerConfig: appRouter,
     );
   }
 }

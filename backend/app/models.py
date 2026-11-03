@@ -2,11 +2,25 @@ from sqlalchemy import Column, Integer, String, Float, ForeignKey, LargeBinary
 from sqlalchemy.sql import func
 from app.database import Base
 
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    email = Column(String, unique=True, index=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+    full_name = Column(String, nullable=False)
+    identifier = Column(String, nullable=True)  # NIP or NIM
+    role = Column(String, default="dosen", nullable=False)  # "dosen" or "mahasiswa"
+    program_study = Column(String, nullable=True)
+    created_at = Column(String, default=func.datetime('now'), nullable=False)
+
 class Class(Base):
     __tablename__ = "classes"
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String, nullable=False)
     code = Column(String, nullable=True)
+    room = Column(String, nullable=True)
+    schedule_day = Column(String, nullable=True)
+    schedule_time = Column(String, nullable=True)
     created_at = Column(String, default=func.datetime('now'), nullable=False)
 
 class Student(Base):

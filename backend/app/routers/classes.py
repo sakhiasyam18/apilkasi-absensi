@@ -16,6 +16,9 @@ router = APIRouter(tags=["classes"])
 class ClassCreate(BaseModel):
     name: str
     code: Optional[str] = None
+    room: Optional[str] = None
+    schedule_day: Optional[str] = None
+    schedule_time: Optional[str] = None
 
 class StudentInput(BaseModel):
     nim: str
@@ -106,7 +109,13 @@ def _process_roster_data(cls: Class, entries: List[Dict[str, Any]], db: Session)
 def create_class(cls_input: ClassCreate, db: Session = Depends(get_db)):
     if not cls_input.name.strip():
         raise AppError("validation_error", "Nama kelas tidak boleh kosong", 422)
-    new_cls = Class(name=cls_input.name.strip(), code=cls_input.code)
+    new_cls = Class(
+        name=cls_input.name.strip(),
+        code=cls_input.code,
+        room=cls_input.room,
+        schedule_day=cls_input.schedule_day,
+        schedule_time=cls_input.schedule_time
+    )
     db.add(new_cls)
     db.commit()
     db.refresh(new_cls)
@@ -114,6 +123,9 @@ def create_class(cls_input: ClassCreate, db: Session = Depends(get_db)):
         "id": new_cls.id, 
         "name": new_cls.name, 
         "code": new_cls.code, 
+        "room": new_cls.room,
+        "schedule_day": new_cls.schedule_day,
+        "schedule_time": new_cls.schedule_time,
         "student_count": 0, 
         "max_students": settings.max_students_per_class
     }
@@ -134,6 +146,9 @@ def get_classes(db: Session = Depends(get_db)):
             "id": c.id,
             "name": c.name,
             "code": c.code,
+            "room": c.room,
+            "schedule_day": c.schedule_day,
+            "schedule_time": c.schedule_time,
             "student_count": count,
             "faces_registered_count": faces_count
         })
@@ -157,6 +172,9 @@ def get_class_detail(id: int, db: Session = Depends(get_db)):
         "id": cls.id,
         "name": cls.name,
         "code": cls.code,
+        "room": cls.room,
+        "schedule_day": cls.schedule_day,
+        "schedule_time": cls.schedule_time,
         "student_count": len(students),
         "students": [
             {

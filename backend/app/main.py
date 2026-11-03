@@ -3,10 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi.exceptions import RequestValidationError
 from app.database import engine, Base
 from app.errors import AppError, app_error_handler, validation_exception_handler
-from app.routers import students, classes, sessions, attendance, points
-
-# Import semua router yang sudah kita buat
-from app.routers import students, classes, sessions
+from app.routers import students, classes, sessions, attendance, points, auth
 
 from app.config import settings
 from app.services import face_engine
@@ -32,6 +29,7 @@ app.include_router(students.router)
 app.include_router(sessions.router)
 app.include_router(attendance.router)
 app.include_router(points.router)
+app.include_router(auth.router)
 
 @app.get("/health")
 def health_check():

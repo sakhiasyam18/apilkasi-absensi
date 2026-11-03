@@ -3,16 +3,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import '../../core/config/settings_repository.dart';
 import '../../core/api/api_client.dart';
+import '../../core/theme/app_theme.dart';
+import '../../core/widgets/luxury_card.dart';
+import '../../core/widgets/primary_button.dart';
 import '../classes/data/classes_repository.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
+
   @override
   ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _urlController = TextEditingController();
+  bool _isTesting = false;
 
   @override
   void initState() {
@@ -20,7 +25,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _urlController.text = ref.read(settingsRepositoryProvider).baseUrl;
   }
 
+  @override
+  void dispose() {
+    _urlController.dispose();
+    super.dispose();
+  }
+
   Future<void> _testConnection() async {
+    setState(() => _isTesting = true);
     await ref.read(settingsRepositoryProvider).setBaseUrl(_urlController.text);
     ref.invalidate(apiClientProvider);
     try {
@@ -30,8 +42,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ref.invalidate(classesListProvider);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Koneksi Berhasil! Status: ${response.data['status']}'),
-            backgroundColor: Colors.green,
+            content: Text('Koneksi Berhasil! Status: ${response.data['status']} • Model: ${response.data['model_loaded']}'),
+            backgroundColor: AppColors.primary,
           ),
         );
       }
@@ -40,9 +52,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Koneksi Gagal: ${e.message}'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppColors.alpa,
           ),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isTesting = false);
       }
     }
   }
@@ -50,101 +66,175 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.bgDark,
       appBar: AppBar(
-        title: const Text('Pengaturan Server'),
-        backgroundColor: Colors.indigo,
-        foregroundColor: Colors.white,
+        title: const Text('Pengaturan Server & IP'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_rounded, size: 20),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.all(20),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Alamat URL Backend',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _urlController,
-              decoration: InputDecoration(
-                labelText: 'URL Server Backend',
-                hintText: 'http://192.168.1.x:8000',
-                border: const OutlineInputBorder(),
-                prefixIcon: const Icon(Icons.dns_outlined),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: () => _urlController.clear(),
-                ),
+              'Konfigurasi Backend InsightFace',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
               ),
             ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.check_circle_outline),
-              label: const Text('Simpan & Tes Koneksi'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.indigo,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 12),
+            const SizedBox(height: 6),
+            const Text(
+              'Pastikan alamat IP komputer server FastAPI dan port 8000 dapat diakses melalui jaringan Wi-Fi lokal yang sama.',
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4),
+            ),
+            const SizedBox(height: 20),
+
+            LuxuryCard(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Alamat URL Server',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _urlController,
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: 'http://192.168.1.32:8000',
+                      prefixIcon: const Icon(Icons.dns_rounded, color: AppColors.textMuted, size: 20),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.clear, color: AppColors.textMuted, size: 18),
+                        onPressed: () => _urlController.clear(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  PrimaryButton(
+                    text: 'Simpan & Tes Koneksi',
+                    icon: Icons.wifi_tethering_rounded,
+                    isLoading: _isTesting,
+                    onPressed: _testConnection,
+                  ),
+                ],
               ),
-              onPressed: _testConnection,
             ),
             const SizedBox(height: 24),
+
             const Text(
-              'Pilihan Cepat (Presets):',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-            ),
-            const SizedBox(height: 8),
-            Card(
-              elevation: 0,
-              color: Colors.blue.shade50,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              child: ListTile(
-                leading: const Icon(Icons.usb, color: Colors.indigo),
-                title: const Text('Koneksi USB (127.0.0.1)', style: TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: const Text('http://127.0.0.1:8000 (Via ADB Reverse USB)'),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                onTap: () {
-                  _urlController.text = 'http://127.0.0.1:8000';
-                  _testConnection();
-                },
+              'Pilihan Cepat (Presets)',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
               ),
             ),
-            const SizedBox(height: 8),
-            Card(
-              elevation: 0,
-              color: Colors.green.shade50,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              child: ListTile(
-                leading: const Icon(Icons.wifi, color: Colors.green),
-                title: const Text('Koneksi Wi-Fi Lokal / LAN', style: TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: const Text('http://192.168.x.x:8000 (Sesuaikan IP Wi-Fi Laptop)'),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                onTap: () {
-                  if (!_urlController.text.startsWith('http://192.168.')) {
-                    _urlController.text = 'http://192.168.1.100:8000';
-                  }
-                  _testConnection();
-                },
+            const SizedBox(height: 12),
+
+            // Wi-Fi Preset (Recommended)
+            LuxuryCard(
+              margin: const EdgeInsets.only(bottom: 12),
+              onTap: () {
+                _urlController.text = 'http://192.168.1.32:8000';
+                _testConnection();
+              },
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.16),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.wifi_rounded, color: AppColors.primaryLight, size: 22),
+                  ),
+                  const SizedBox(width: 14),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Wi-Fi Laptop (192.168.1.32)',
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'http://192.168.1.32:8000 (Mode Nirkabel/Tanpa Kabel)',
+                          style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.primaryLight),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
+
+            // USB ADB Reverse Preset
+            LuxuryCard(
+              margin: const EdgeInsets.only(bottom: 12),
+              onTap: () {
+                _urlController.text = 'http://127.0.0.1:8000';
+                _testConnection();
+              },
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.secondary.withValues(alpha: 0.16),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.usb_rounded, color: AppColors.secondary, size: 22),
+                  ),
+                  const SizedBox(width: 14),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Koneksi USB / Localhost',
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'http://127.0.0.1:8000 (Via ADB Reverse Kabel USB)',
+                          style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.textMuted),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: Colors.amber.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.amber.shade300),
+                color: AppColors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.primary.withValues(alpha: 0.2), width: 1),
               ),
               child: const Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.info_outline, color: Colors.amber, size: 20),
-                  SizedBox(width: 8),
+                  Icon(Icons.info_outline_rounded, color: AppColors.primaryLight, size: 20),
+                  SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Jika HP tersambung ke laptop dengan kabel USB, pilih "Koneksi USB (127.0.0.1:8000)" karena lebih stabil dan tidak memerlukan koneksi internet/Wi-Fi yang sama.',
-                      style: TextStyle(fontSize: 12),
+                      'Sistem V2 telah dikonfigurasi untuk bekerja optimal melalui jaringan Wi-Fi lokal sehingga HP tidak perlu dicolokkan ke kabel USB saat digunakan di ruang kelas.',
+                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
                     ),
                   ),
                 ],
