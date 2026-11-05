@@ -11,8 +11,15 @@ class SettingsRepository {
   final SharedPreferences _prefs;
   SettingsRepository(this._prefs);
 
-  // Default ke IP Wi-Fi PC user jika belum di-set
-  String get baseUrl => _prefs.getString('backend_base_url') ?? 'http://192.168.1.32:8000';
+  // Default ke koneksi USB (127.0.0.1:8000 via ADB reverse)
+  String get baseUrl {
+    final saved = _prefs.getString('backend_base_url');
+    // Jika masih null atau masih tersimpan IP Wi-Fi lama, gunakan default port USB
+    if (saved == null || saved == 'http://192.168.1.32:8000') {
+      return 'http://127.0.0.1:8000';
+    }
+    return saved;
+  }
   
   Future<void> setBaseUrl(String url) async {
     if (url.endsWith('/')) url = url.substring(0, url.length - 1);

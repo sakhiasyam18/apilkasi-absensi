@@ -5,6 +5,7 @@ import '../../../core/widgets/luxury_card.dart';
 import '../../../core/widgets/status_badge.dart';
 import '../../../core/widgets/empty_state_view.dart';
 import '../../attendance/data/attendance_repository.dart';
+import '../../auth/presentation/auth_state.dart';
 
 class MahasiswaHistoryTab extends ConsumerStatefulWidget {
   const MahasiswaHistoryTab({super.key});
@@ -14,8 +15,16 @@ class MahasiswaHistoryTab extends ConsumerStatefulWidget {
 }
 
 class _MahasiswaHistoryTabState extends ConsumerState<MahasiswaHistoryTab> {
-  DateTime _currentMonth = DateTime(2026, 1, 1);
-  DateTime _selectedDate = DateTime(2026, 1, 18);
+  late DateTime _currentMonth;
+  late DateTime _selectedDate;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _currentMonth = DateTime(now.year, now.month, 1);
+    _selectedDate = DateTime(now.year, now.month, now.day);
+  }
 
   final List<String> _weekdays = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
   final List<String> _monthNames = [
@@ -37,6 +46,9 @@ class _MahasiswaHistoryTabState extends ConsumerState<MahasiswaHistoryTab> {
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authProvider);
+    final user = authState.user;
+    final userNim = user?.identifier?.trim() ?? '';
     final sessionsAsync = ref.watch(allSessionsProvider);
 
     return Scaffold(
@@ -53,7 +65,7 @@ class _MahasiswaHistoryTabState extends ConsumerState<MahasiswaHistoryTab> {
               const SizedBox(height: 24),
               _buildSelectedDateHeader(),
               const SizedBox(height: 14),
-              _buildDateSessionsList(sessionsAsync),
+              _buildDateSessionsList(sessionsAsync, userNim),
               const SizedBox(height: 20),
             ],
           ),
@@ -256,7 +268,7 @@ class _MahasiswaHistoryTabState extends ConsumerState<MahasiswaHistoryTab> {
     );
   }
 
-  Widget _buildDateSessionsList(AsyncValue sessionsAsync) {
+  Widget _buildDateSessionsList(AsyncValue sessionsAsync, String userNim) {
     return sessionsAsync.when(
       loading: () => const Center(
         child: Padding(
@@ -266,12 +278,31 @@ class _MahasiswaHistoryTabState extends ConsumerState<MahasiswaHistoryTab> {
       ),
       error: (err, stack) => _buildEmptyDaySessions(),
       data: (sessions) {
-        if (sessions.isEmpty) {
+        final selectedDateStr =
+            '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}';
+
+        // Filter sesi yang berada pada tanggal yang dipilih
+        final daySessions = sessions.where((sess) {
+          final isSameDate = sess.sessionDate == selectedDateStr;
+          if (!isSameDate) return false;
+          if (userNim.isEmpty) return true;
+          final isParticipant = sess.participants.any((p) => p.nim == userNim);
+          final isIdentified = sess.progress?.identified.any((p) => p.nim == userNim) ?? false;
+          return isParticipant || isIdentified;
+        }).toList();
+
+        if (daySessions.isEmpty) {
           return _buildEmptyDaySessions();
         }
 
         return Column(
-          children: sessions.map<Widget>((sess) {
+          children: daySessions.map<Widget>((sess) {
+            final isIdentified = userNim.isNotEmpty &&
+                (sess.progress?.identified.any((p) => p.nim == userNim) ?? false);
+            final statusStr = isIdentified
+                ? 'hadir'
+                : (sess.status == 'final' ? 'alpa' : 'belum');
+
             return LuxuryCard(
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.all(16),
@@ -283,7 +314,7 @@ class _MahasiswaHistoryTabState extends ConsumerState<MahasiswaHistoryTab> {
                     children: [
                       Expanded(
                         child: Text(
-                          sess.name.isNotEmpty ? sess.name : 'Sesi Perkuliahan',
+                          sess.activityName.isNotEmpty ? sess.activityName : 'Sesi Perkuliahan',
                           style: const TextStyle(
                             color: AppColors.textPrimary,
                             fontSize: 15,
@@ -293,7 +324,7 @@ class _MahasiswaHistoryTabState extends ConsumerState<MahasiswaHistoryTab> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const StatusBadge(status: 'hadir'),
+                      StatusBadge(status: statusStr),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -302,14 +333,14 @@ class _MahasiswaHistoryTabState extends ConsumerState<MahasiswaHistoryTab> {
                       const Icon(Icons.location_on_outlined, size: 14, color: AppColors.textMuted),
                       const SizedBox(width: 4),
                       const Text(
-                        'B12 - 201',
+                        'Ruang Perkuliahan',
                         style: TextStyle(color: AppColors.textMuted, fontSize: 12),
                       ),
                       const SizedBox(width: 16),
                       const Icon(Icons.schedule_rounded, size: 14, color: AppColors.textMuted),
                       const SizedBox(width: 4),
                       Text(
-                        sess.createdAt.isNotEmpty ? sess.createdAt.split('T').last.substring(0, 5) : '07:00 - 09.35',
+                        sess.sessionTime.isNotEmpty ? sess.sessionTime : 'Jadwal Perkuliahan',
                         style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
                       ),
                     ],

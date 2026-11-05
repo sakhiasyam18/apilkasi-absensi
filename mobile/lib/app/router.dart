@@ -28,7 +28,10 @@ class RoleRouter extends ConsumerWidget {
     final authState = ref.watch(authProvider);
     final user = authState.user;
 
-    if (user != null && user.isMahasiswa) {
+    if (user == null) {
+      return const LoginScreen();
+    }
+    if (user.isMahasiswa) {
       return const MahasiswaMainShell();
     }
     return const DosenMainShell();

@@ -81,14 +81,39 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Top Settings bar for quick IP change
-                Align(
-                  alignment: Alignment.topRight,
-                  child: IconButton(
-                    icon: const Icon(Icons.settings_outlined, color: AppColors.textSecondary),
-                    tooltip: 'Pengaturan IP Backend',
-                    onPressed: () => context.push('/settings'),
-                  ),
+                // Top Settings bar for quick IP change and USB indicator
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: AppColors.cardSurface,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.35), width: 1),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.usb_rounded, color: AppColors.primary, size: 16),
+                          SizedBox(width: 6),
+                          Text(
+                            'Mode Port USB Aktif',
+                            style: TextStyle(
+                              color: AppColors.primaryLight,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.settings_outlined, color: AppColors.textSecondary),
+                      tooltip: 'Pengaturan IP Backend',
+                      onPressed: () => context.push('/settings'),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 10),
 

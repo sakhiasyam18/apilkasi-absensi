@@ -51,6 +51,13 @@ class StatusBadge extends StatelessWidget {
         label = 'Wajah Terdaftar';
         icon = Icons.face_retouching_natural;
         break;
+      case 'unregistered':
+      case 'belum':
+      case 'belum terdaftar':
+        baseColor = AppColors.sakit;
+        label = 'Belum Terdaftar';
+        icon = Icons.no_photography_outlined;
+        break;
       case 'upcoming':
       case 'akan datang':
         baseColor = AppColors.textMuted;

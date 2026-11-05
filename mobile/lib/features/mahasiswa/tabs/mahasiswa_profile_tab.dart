@@ -1,10 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/api/api_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/luxury_card.dart';
 import '../../../core/widgets/status_badge.dart';
 import '../../auth/presentation/auth_state.dart';
+
+final studentFaceStatusProvider = FutureProvider.autoDispose.family<bool, String>((ref, nim) async {
+  if (nim.isEmpty || nim == '-') return false;
+  try {
+    final dio = ref.watch(apiClientProvider);
+    final response = await dio.get('/students/lookup', queryParameters: {'nim': nim});
+    final hasFaces = response.data['has_faces'];
+    return hasFaces == true || hasFaces == 1;
+  } catch (_) {
+    return false;
+  }
+});
 
 class MahasiswaProfileTab extends ConsumerWidget {
   const MahasiswaProfileTab({super.key});
@@ -14,8 +27,11 @@ class MahasiswaProfileTab extends ConsumerWidget {
     final authState = ref.watch(authProvider);
     final user = authState.user;
 
-    final name = user?.fullName.isNotEmpty == true ? user!.fullName : 'Allen Sebastian';
-    final nim = user?.identifier?.isNotEmpty == true ? user!.identifier! : '240535678149';
+    final name = user?.fullName.isNotEmpty == true ? user!.fullName : 'Mahasiswa';
+    final nim = user?.identifier?.isNotEmpty == true ? user!.identifier! : '-';
+
+    final faceStatusAsync = ref.watch(studentFaceStatusProvider(nim));
+    final isFaceRegistered = faceStatusAsync.value ?? false;
 
     return Scaffold(
       backgroundColor: AppColors.bgDark,
@@ -27,7 +43,7 @@ class MahasiswaProfileTab extends ConsumerWidget {
             children: [
               _buildHeader(),
               const SizedBox(height: 20),
-              _buildProfileHeaderCard(name, nim),
+              _buildProfileHeaderCard(name, nim, isFaceRegistered: isFaceRegistered),
               const SizedBox(height: 24),
               _buildSectionTitle('Menu Profile'),
               const SizedBox(height: 12),
@@ -66,7 +82,7 @@ class MahasiswaProfileTab extends ConsumerWidget {
     );
   }
 
-  Widget _buildProfileHeaderCard(String name, String nim) {
+  Widget _buildProfileHeaderCard(String name, String nim, {required bool isFaceRegistered}) {
     return LuxuryCard(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -116,8 +132,8 @@ class MahasiswaProfileTab extends ConsumerWidget {
           // Face Data Status
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              Text(
+            children: [
+              const Text(
                 'Face Data Status',
                 style: TextStyle(
                   color: AppColors.textPrimary,
@@ -125,7 +141,7 @@ class MahasiswaProfileTab extends ConsumerWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              StatusBadge(status: 'terdaftar'),
+              StatusBadge(status: isFaceRegistered ? 'terdaftar' : 'belum'),
             ],
           ),
         ],

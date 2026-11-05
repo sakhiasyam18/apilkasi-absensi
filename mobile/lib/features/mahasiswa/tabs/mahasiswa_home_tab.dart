@@ -28,8 +28,36 @@ class _MahasiswaHomeTabState extends ConsumerState<MahasiswaHomeTab> {
     final classesAsync = ref.watch(classesListProvider);
     final sessionsAsync = ref.watch(allSessionsProvider);
 
-    final studentName = user?.fullName.isNotEmpty == true ? user!.fullName : 'Allen Sebastian';
-    final studentNim = user?.identifier?.isNotEmpty == true ? user!.identifier! : '240535678149';
+    final studentName = user?.fullName.isNotEmpty == true ? user!.fullName : 'Mahasiswa';
+    final studentNim = user?.identifier?.isNotEmpty == true ? user!.identifier! : '-';
+    final userNim = user?.identifier?.trim() ?? '';
+
+    // Perhitungan Kehadiran Dinamis (Default Kosong = 0)
+    int hadirCount = 0;
+    int sakitCount = 0;
+    int izinCount = 0;
+    int alpaCount = 0;
+    int totalCount = 0;
+
+    sessionsAsync.whenData((sessions) {
+      if (userNim.isNotEmpty) {
+        for (final sess in sessions) {
+          final isIdentified = sess.progress?.identified.any((p) => p.nim == userNim) ?? false;
+          final isParticipant = sess.participants.any((p) => p.nim == userNim);
+
+          if (isIdentified) {
+            hadirCount++;
+            totalCount++;
+          } else if (isParticipant && sess.status == 'final') {
+            alpaCount++;
+            totalCount++;
+          }
+        }
+      }
+    });
+
+    final double attendanceRatio = totalCount > 0 ? (hadirCount / totalCount) : 0.0;
+    final int attendancePercent = (attendanceRatio * 100).round();
 
     return Scaffold(
       backgroundColor: AppColors.bgDark,
@@ -51,7 +79,14 @@ class _MahasiswaHomeTabState extends ConsumerState<MahasiswaHomeTab> {
                 const SizedBox(height: 20),
                 _buildGreetingCard(studentName, studentNim),
                 const SizedBox(height: 24),
-                _buildLaporanKehadiran(),
+                _buildLaporanKehadiran(
+                  percent: attendancePercent,
+                  ratio: attendanceRatio,
+                  hadir: hadirCount,
+                  sakit: sakitCount,
+                  izin: izinCount,
+                  alpa: alpaCount,
+                ),
                 const SizedBox(height: 28),
                 _buildSectionHeader('Kelas Hari Ini'),
                 const SizedBox(height: 14),
@@ -59,7 +94,7 @@ class _MahasiswaHomeTabState extends ConsumerState<MahasiswaHomeTab> {
                 const SizedBox(height: 28),
                 _buildSectionHeader('History Terbaru', onViewAll: widget.onNavigateToHistory),
                 const SizedBox(height: 14),
-                _buildRecentHistory(sessionsAsync),
+                _buildRecentHistory(sessionsAsync, userNim),
                 const SizedBox(height: 24),
               ],
             ),
@@ -201,7 +236,14 @@ class _MahasiswaHomeTabState extends ConsumerState<MahasiswaHomeTab> {
     );
   }
 
-  Widget _buildLaporanKehadiran() {
+  Widget _buildLaporanKehadiran({
+    required int percent,
+    required double ratio,
+    required int hadir,
+    required int sakit,
+    required int izin,
+    required int alpa,
+  }) {
     return LuxuryCard(
       padding: const EdgeInsets.all(18),
       child: Column(
@@ -232,24 +274,26 @@ class _MahasiswaHomeTabState extends ConsumerState<MahasiswaHomeTab> {
                           width: 100,
                           height: 100,
                           child: CircularProgressIndicator(
-                            value: 1.0,
+                            value: ratio,
                             strokeWidth: 10,
                             backgroundColor: AppColors.border,
-                            valueColor: const AlwaysStoppedAnimation<Color>(AppColors.hadir),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              ratio > 0 ? AppColors.hadir : AppColors.textMuted.withValues(alpha: 0.3),
+                            ),
                           ),
                         ),
                         Column(
                           mainAxisAlignment: MainAxisAlignment.center,
-                          children: const [
+                          children: [
                             Text(
-                              '100%',
-                              style: TextStyle(
+                              '$percent%',
+                              style: const TextStyle(
                                 color: AppColors.textPrimary,
                                 fontSize: 20,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
-                            Text(
+                            const Text(
                               'Kehadiran',
                               style: TextStyle(
                                 color: AppColors.textMuted,
@@ -272,17 +316,17 @@ class _MahasiswaHomeTabState extends ConsumerState<MahasiswaHomeTab> {
                   children: [
                     Row(
                       children: [
-                        Expanded(child: _buildMiniStat(label: 'Hadir', count: '42', color: AppColors.hadir)),
+                        Expanded(child: _buildMiniStat(label: 'Hadir', count: '$hadir', color: AppColors.hadir)),
                         const SizedBox(width: 10),
-                        Expanded(child: _buildMiniStat(label: 'Sakit', count: '0', color: AppColors.sakit)),
+                        Expanded(child: _buildMiniStat(label: 'Sakit', count: '$sakit', color: AppColors.sakit)),
                       ],
                     ),
                     const SizedBox(height: 10),
                     Row(
                       children: [
-                        Expanded(child: _buildMiniStat(label: 'Izin', count: '0', color: AppColors.izin)),
+                        Expanded(child: _buildMiniStat(label: 'Izin', count: '$izin', color: AppColors.izin)),
                         const SizedBox(width: 10),
-                        Expanded(child: _buildMiniStat(label: 'Alpa', count: '0', color: AppColors.alpa)),
+                        Expanded(child: _buildMiniStat(label: 'Alpa', count: '$alpa', color: AppColors.alpa)),
                       ],
                     ),
                   ],
@@ -371,7 +415,11 @@ class _MahasiswaHomeTabState extends ConsumerState<MahasiswaHomeTab> {
         }
 
         return Column(
-          children: classes.take(2).map<Widget>((cls) {
+          children: classes.take(3).map<Widget>((cls) {
+            final codeLabel = cls.code?.isNotEmpty == true ? cls.code! : (cls.scheduleDay ?? 'Kelas');
+            final roomLabel = cls.room?.isNotEmpty == true ? cls.room! : 'Ruang Kelas';
+            final timeLabel = cls.scheduleTime?.isNotEmpty == true ? cls.scheduleTime! : 'Jadwal Perkuliahan';
+
             return LuxuryCard(
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.all(16),
@@ -393,7 +441,22 @@ class _MahasiswaHomeTabState extends ConsumerState<MahasiswaHomeTab> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const StatusBadge(status: 'hadir'),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.3), width: 1),
+                        ),
+                        child: Text(
+                          codeLabel,
+                          style: const TextStyle(
+                            color: AppColors.primaryLight,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -402,14 +465,14 @@ class _MahasiswaHomeTabState extends ConsumerState<MahasiswaHomeTab> {
                       const Icon(Icons.location_on_outlined, size: 14, color: AppColors.textMuted),
                       const SizedBox(width: 4),
                       Text(
-                        cls.room ?? 'B12 - 201',
+                        roomLabel,
                         style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
                       ),
                       const SizedBox(width: 16),
                       const Icon(Icons.schedule_rounded, size: 14, color: AppColors.textMuted),
                       const SizedBox(width: 4),
                       Text(
-                        cls.scheduleTime ?? '07:00 - 09.35',
+                        timeLabel,
                         style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
                       ),
                     ],
@@ -431,17 +494,34 @@ class _MahasiswaHomeTabState extends ConsumerState<MahasiswaHomeTab> {
     );
   }
 
-  Widget _buildRecentHistory(AsyncValue sessionsAsync) {
+  Widget _buildRecentHistory(AsyncValue sessionsAsync, String userNim) {
     return sessionsAsync.when(
       loading: () => const SizedBox.shrink(),
       error: (err, stack) => _buildEmptyHistory(),
       data: (sessions) {
-        if (sessions.isEmpty) {
+        // Ambil sesi yang relevan dengan mahasiswa ini
+        final userSessions = sessions.where((sess) {
+          if (userNim.isEmpty) return true;
+          final isIdentified = sess.progress?.identified.any((p) => p.nim == userNim) ?? false;
+          final isParticipant = sess.participants.any((p) => p.nim == userNim);
+          return isIdentified || isParticipant;
+        }).toList();
+
+        if (userSessions.isEmpty) {
           return _buildEmptyHistory();
         }
 
         return Column(
-          children: sessions.take(2).map<Widget>((sess) {
+          children: userSessions.take(3).map<Widget>((sess) {
+            final isIdentified = userNim.isNotEmpty &&
+                (sess.progress?.identified.any((p) => p.nim == userNim) ?? false);
+            final statusStr = isIdentified
+                ? 'hadir'
+                : (sess.status == 'final' ? 'alpa' : 'belum');
+            final badgeColor = isIdentified
+                ? AppColors.hadir
+                : (sess.status == 'final' ? AppColors.alpa : AppColors.textMuted);
+
             return LuxuryCard(
               margin: const EdgeInsets.only(bottom: 10),
               padding: const EdgeInsets.all(14),
@@ -451,11 +531,19 @@ class _MahasiswaHomeTabState extends ConsumerState<MahasiswaHomeTab> {
                     width: 38,
                     height: 38,
                     decoration: BoxDecoration(
-                      color: AppColors.hadir.withValues(alpha: 0.15),
+                      color: badgeColor.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.hadir.withValues(alpha: 0.4), width: 1),
+                      border: Border.all(color: badgeColor.withValues(alpha: 0.4), width: 1),
                     ),
-                    child: const Icon(Icons.check_rounded, color: AppColors.hadir, size: 20),
+                    child: Icon(
+                      isIdentified
+                          ? Icons.check_rounded
+                          : (sess.status == 'final'
+                              ? Icons.close_rounded
+                              : Icons.hourglass_top_rounded),
+                      color: badgeColor,
+                      size: 20,
+                    ),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -463,7 +551,7 @@ class _MahasiswaHomeTabState extends ConsumerState<MahasiswaHomeTab> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          sess.name.isNotEmpty ? sess.name : 'Presensi Kuliah',
+                          sess.activityName.isNotEmpty ? sess.activityName : 'Presensi Kuliah',
                           style: const TextStyle(
                             color: AppColors.textPrimary,
                             fontSize: 14,
@@ -474,7 +562,7 @@ class _MahasiswaHomeTabState extends ConsumerState<MahasiswaHomeTab> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          sess.date ?? 'Hari ini',
+                          sess.sessionDate.isNotEmpty ? sess.sessionDate : 'Hari Ini',
                           style: const TextStyle(
                             color: AppColors.textMuted,
                             fontSize: 11,
@@ -483,7 +571,7 @@ class _MahasiswaHomeTabState extends ConsumerState<MahasiswaHomeTab> {
                       ],
                     ),
                   ),
-                  const StatusBadge(status: 'hadir'),
+                  StatusBadge(status: statusStr),
                 ],
               ),
             );
@@ -492,7 +580,6 @@ class _MahasiswaHomeTabState extends ConsumerState<MahasiswaHomeTab> {
       },
     );
   }
-
   Widget _buildEmptyHistory() {
     return Container(
       width: double.infinity,

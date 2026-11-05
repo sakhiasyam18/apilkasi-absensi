@@ -14,10 +14,10 @@ class MahasiswaAccountScreen extends ConsumerWidget {
     final authState = ref.watch(authProvider);
     final user = authState.user;
 
-    final name = user?.fullName.isNotEmpty == true ? user!.fullName : 'Allen Sebastian';
-    final nim = user?.identifier?.isNotEmpty == true ? user!.identifier! : '240535678149';
-    final email = user?.email.isNotEmpty == true ? user!.email : 'allen.sebastian@um.ac.id';
-    final prodi = user?.programStudy?.isNotEmpty == true ? user!.programStudy! : 'Teknik Informatika';
+    final name = user?.fullName.isNotEmpty == true ? user!.fullName : 'Mahasiswa';
+    final nim = user?.identifier?.isNotEmpty == true ? user!.identifier! : '-';
+    final email = user?.email.isNotEmpty == true ? user!.email : '-';
+    final prodi = user?.programStudy?.isNotEmpty == true ? user!.programStudy! : 'Program Studi Belum Diatur';
 
     return Scaffold(
       backgroundColor: AppColors.bgDark,

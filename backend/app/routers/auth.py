@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import User
+from app.models import User, Student
 from app.schemas import UserResponse, LoginRequest, RegisterRequest
 from app.errors import AppError
 
@@ -38,6 +38,19 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
+
+    # Bila mendaftar sebagai mahasiswa dan mengisi NIM, pastikan profil mahasiswa terbuat di tabel students
+    if user.role == "mahasiswa" and user.identifier:
+        st = db.query(Student).filter(Student.nim == user.identifier).first()
+        if not st:
+            st = Student(
+                nim=user.identifier,
+                full_name=user.full_name,
+                has_faces=0
+            )
+            db.add(st)
+            db.commit()
+
     return user
 
 @router.post("/login", response_model=UserResponse)
