@@ -52,21 +52,26 @@ class _LuxuryCardState extends State<LuxuryCard> {
       child: Material(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(widget.borderRadius),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(widget.borderRadius),
-          onTap: widget.onTap,
-          onHover: (hovering) {
-            setState(() {
-              _isHovered = hovering;
-            });
-          },
-          splashColor: AppColors.primary.withValues(alpha: 0.12),
-          highlightColor: AppColors.primary.withValues(alpha: 0.06),
-          child: Padding(
-            padding: widget.padding ?? const EdgeInsets.all(16),
-            child: widget.child,
-          ),
-        ),
+        child: widget.onTap != null
+            ? InkWell(
+                borderRadius: BorderRadius.circular(widget.borderRadius),
+                onTap: widget.onTap,
+                onHover: (hovering) {
+                  setState(() {
+                    _isHovered = hovering;
+                  });
+                },
+                splashColor: AppColors.primary.withValues(alpha: 0.12),
+                highlightColor: AppColors.primary.withValues(alpha: 0.06),
+                child: Padding(
+                  padding: widget.padding ?? const EdgeInsets.all(16),
+                  child: widget.child,
+                ),
+              )
+            : Padding(
+                padding: widget.padding ?? const EdgeInsets.all(16),
+                child: widget.child,
+              ),
       ),
     );
   }

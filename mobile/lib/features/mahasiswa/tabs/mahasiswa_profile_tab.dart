@@ -5,7 +5,6 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/luxury_card.dart';
 import '../../../core/widgets/status_badge.dart';
 import '../../auth/presentation/auth_state.dart';
-import '../screens/mahasiswa_account_screen.dart';
 
 class MahasiswaProfileTab extends ConsumerWidget {
   const MahasiswaProfileTab({super.key});
@@ -155,11 +154,7 @@ class MahasiswaProfileTab extends ConsumerWidget {
             icon: Icons.person_outline_rounded,
             title: 'Informasi Akun',
             subtitle: 'email, NIM, etc',
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const MahasiswaAccountScreen()),
-              );
-            },
+            onTap: () => context.push('/mahasiswa/account'),
           ),
           const Divider(color: AppColors.border, height: 1, indent: 56),
           _buildMenuItem(
@@ -224,34 +219,50 @@ class MahasiswaProfileTab extends ConsumerWidget {
   }) {
     final color = isDestructive ? AppColors.alpa : AppColors.textPrimary;
 
-    return ListTile(
+    return InkWell(
       onTap: onTap,
-      leading: Container(
-        width: 38,
-        height: 38,
-        decoration: BoxDecoration(
-          color: (isDestructive ? AppColors.alpa : AppColors.primary).withValues(alpha: 0.12),
-          shape: BoxShape.circle,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: (isDestructive ? AppColors.alpa : AppColors.primary).withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: isDestructive ? AppColors.alpa : AppColors.primaryLight, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(color: AppColors.textMuted, fontSize: 11.5),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (!isDestructive)
+              const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted, size: 20),
+          ],
         ),
-        child: Icon(icon, color: isDestructive ? AppColors.alpa : AppColors.primaryLight, size: 20),
       ),
-      title: Text(
-        title,
-        style: TextStyle(
-          color: color,
-          fontSize: 14.5,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      subtitle: subtitle != null
-          ? Text(
-              subtitle,
-              style: const TextStyle(color: AppColors.textMuted, fontSize: 11.5),
-            )
-          : null,
-      trailing: isDestructive
-          ? null
-          : const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted, size: 20),
     );
   }
 
