@@ -1,9 +1,12 @@
 import 'dart:io';
+import 'dart:math';
 import 'package:camera/camera.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../core/utils/error_utils.dart';
@@ -26,22 +29,46 @@ class _AttendanceCameraScreenState
   CameraController? _controller;
   List<CameraDescription> _cameras = [];
   int _selectedCameraIndex = 0;
+  CameraDescription? get _currentCamera =>
+      _cameras.isNotEmpty ? _cameras[_selectedCameraIndex] : null;
+
   bool _isInitializing = true;
   bool _isProcessing = false;
   String? _statusMessage;
   FlashMode _flashMode = FlashMode.off;
 
+  // ML Kit Live Multi-Face Detection
+  FaceDetector? _faceDetector;
+  bool _isDetecting = false;
+  int _lastFrameTime = 0;
+  List<Rect> _detectedFaceRects = [];
+  Size? _inputImageSize;
+  InputImageRotation? _inputImageRotation;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _initDetector();
     _initializeCamera();
+  }
+
+  void _initDetector() {
+    final options = FaceDetectorOptions(
+      performanceMode: FaceDetectorMode.fast,
+      enableClassification: false,
+      enableLandmarks: false,
+      enableContours: false,
+      enableTracking: false,
+    );
+    _faceDetector = FaceDetector(options: options);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _controller?.dispose();
+    _faceDetector?.close();
     super.dispose();
   }
 
@@ -74,7 +101,7 @@ class _AttendanceCameraScreenState
         return;
       }
 
-      // Utamakan kamera belakang untuk foto grup kelas (Section 9.1 & 9.2)
+      // Default gunakan kamera belakang untuk foto grup kelas
       int backCameraIdx = _cameras.indexWhere(
         (c) => c.lensDirection == CameraLensDirection.back,
       );
@@ -90,25 +117,36 @@ class _AttendanceCameraScreenState
   }
 
   Future<void> _startController(CameraDescription camera) async {
-    _controller?.dispose();
-    final controller = CameraController(
-      camera,
-      ResolutionPreset.high,
-      enableAudio: false,
-      imageFormatGroup: ImageFormatGroup.jpeg,
-    );
-
-    _controller = controller;
-
     try {
+      if (_controller != null) {
+        if (_controller!.value.isStreamingImages) {
+          await _controller!.stopImageStream();
+        }
+        await _controller!.dispose();
+        _controller = null;
+      }
+
+      final controller = CameraController(
+        camera,
+        ResolutionPreset.high,
+        enableAudio: false,
+        imageFormatGroup: ImageFormatGroup.nv21,
+      );
+
+      _controller = controller;
+
       await controller.initialize();
       await controller.setFlashMode(_flashMode);
+
       if (mounted) {
         setState(() {
           _isInitializing = false;
           _statusMessage = null;
         });
       }
+
+      // Mulai deteksi wajah live stream
+      await controller.startImageStream(_processLiveAttendanceFrame);
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -117,6 +155,77 @@ class _AttendanceCameraScreenState
         });
       }
     }
+  }
+
+  void _processLiveAttendanceFrame(CameraImage image) async {
+    final cam = _currentCamera;
+    if (_isDetecting || _isProcessing || _faceDetector == null || cam == null) return;
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    // Throttle frame processing (~150 ms)
+    if (now - _lastFrameTime < 150) return;
+    _lastFrameTime = now;
+    _isDetecting = true;
+
+    try {
+      final inputImage = _buildInputImage(image, cam);
+      if (inputImage == null) {
+        _isDetecting = false;
+        return;
+      }
+
+      final faces = await _faceDetector!.processImage(inputImage);
+      if (!mounted) {
+        _isDetecting = false;
+        return;
+      }
+
+      final rects = faces.map((f) => f.boundingBox).toList();
+
+      setState(() {
+        _detectedFaceRects = rects;
+        _inputImageSize = inputImage.metadata?.size;
+        _inputImageRotation = inputImage.metadata?.rotation;
+      });
+    } catch (_) {
+    } finally {
+      _isDetecting = false;
+    }
+  }
+
+  InputImage? _buildInputImage(CameraImage image, CameraDescription camera) {
+    final sensorOrientation = camera.sensorOrientation;
+    InputImageRotation rotation = InputImageRotation.rotation0deg;
+    switch (sensorOrientation) {
+      case 90:
+        rotation = InputImageRotation.rotation90deg;
+        break;
+      case 180:
+        rotation = InputImageRotation.rotation180deg;
+        break;
+      case 270:
+        rotation = InputImageRotation.rotation270deg;
+        break;
+      default:
+        rotation = InputImageRotation.rotation0deg;
+    }
+
+    final format = InputImageFormatValue.fromRawValue(image.format.raw);
+    if (format == null) return null;
+
+    final bytes = Uint8List.fromList(
+      image.planes.fold<List<int>>(<int>[], (list, plane) => list..addAll(plane.bytes)),
+    );
+
+    return InputImage.fromBytes(
+      bytes: bytes,
+      metadata: InputImageMetadata(
+        size: Size(image.width.toDouble(), image.height.toDouble()),
+        rotation: rotation,
+        format: format,
+        bytesPerRow: image.planes[0].bytesPerRow,
+      ),
+    );
   }
 
   Future<void> _toggleFlash() async {
@@ -134,6 +243,7 @@ class _AttendanceCameraScreenState
     if (_cameras.length < 2 || _isProcessing) return;
     final nextIndex = (_selectedCameraIndex + 1) % _cameras.length;
     _selectedCameraIndex = nextIndex;
+    _detectedFaceRects.clear();
     await _startController(_cameras[_selectedCameraIndex]);
   }
 
@@ -150,10 +260,15 @@ class _AttendanceCameraScreenState
     });
 
     try {
-      // 1. Ambil foto asli dari kamera
+      // 1. Hentikan stream sementara saat capture
+      if (_controller!.value.isStreamingImages) {
+        await _controller!.stopImageStream();
+      }
+
+      // 2. Ambil foto asli dari kamera
       final xFile = await _controller!.takePicture();
 
-      // 2. Kompresi gambar sesuai standar Section 9.4 (Auto EXIF orientation, maxUploadSide = 1920)
+      // 3. Kompresi gambar sesuai standar Section 9.4 (Auto EXIF orientation, maxUploadSide = 1920)
       setState(() {
         _statusMessage = 'Mengompresi dan menyiapkan gambar...';
       });
@@ -166,9 +281,9 @@ class _AttendanceCameraScreenState
       final clientCaptureId = const Uuid().v4();
       final compressedFile = File(prepResult.savedPath ?? xFile.path);
 
-      // 3. Kirim ke backend POST /attendance/recognize
+      // 4. Kirim ke backend POST /attendance/recognize
       setState(() {
-        _statusMessage = 'Menganalisis wajah dengan AI InsightFace...';
+        _statusMessage = 'Menganalisis presensi dengan AI InsightFace...';
       });
 
       final repo = ref.read(attendanceRepositoryProvider);
@@ -179,12 +294,12 @@ class _AttendanceCameraScreenState
         sha256Hex: prepResult.sha256Hex,
       );
 
-      // 4. Invalidate provider sesi agar daftar terbaru tersinkronisasi
+      // 5. Invalidate provider sesi agar daftar terbaru tersinkronisasi
       ref.invalidate(sessionDetailProvider(widget.sessionId));
 
       if (!mounted) return;
 
-      // 5. Buka layar hasil pengenalan (AttendanceResultScreen)
+      // 6. Buka layar hasil pengenalan (AttendanceResultScreen)
       context.push(
         '/session/${widget.sessionId}/result',
         extra: {
@@ -207,6 +322,14 @@ class _AttendanceCameraScreenState
           _isProcessing = false;
           _statusMessage = null;
         });
+        // Restart stream jika controller masih aktif dan belum di-dispose
+        if (_controller != null &&
+            _controller!.value.isInitialized &&
+            !_controller!.value.isStreamingImages) {
+          try {
+            await _controller!.startImageStream(_processLiveAttendanceFrame);
+          } catch (_) {}
+        }
       }
     }
   }
@@ -236,6 +359,8 @@ class _AttendanceCameraScreenState
   @override
   Widget build(BuildContext context) {
     final sessionAsync = ref.watch(sessionDetailProvider(widget.sessionId));
+    final curCam = _currentCamera;
+    final isFront = curCam?.lensDirection == CameraLensDirection.front;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -253,8 +378,8 @@ class _AttendanceCameraScreenState
             onPressed: _toggleFlash,
           ),
           IconButton(
-            icon: const Icon(Icons.flip_camera_android),
-            tooltip: 'Ganti Kamera',
+            icon: const Icon(Icons.flip_camera_android_rounded),
+            tooltip: 'Ganti Kamera Depan/Belakang',
             onPressed: _switchCamera,
           ),
         ],
@@ -282,93 +407,166 @@ class _AttendanceCameraScreenState
               child: CameraPreview(_controller!),
             ),
 
-          // 2. Panduan Komposisi Grid (Rule of Thirds)
+          // 2. Live Face Circles ("Bunder-Bunder Wajah" Overlay)
+          if (!_isInitializing &&
+              _controller != null &&
+              _controller!.value.isInitialized &&
+              _inputImageSize != null &&
+              _detectedFaceRects.isNotEmpty)
+            IgnorePointer(
+              child: CustomPaint(
+                painter: _LiveFacesPainter(
+                  faces: _detectedFaceRects,
+                  imageSize: _inputImageSize!,
+                  rotation: _inputImageRotation ?? InputImageRotation.rotation0deg,
+                  isFrontCamera: isFront,
+                ),
+              ),
+            ),
+
+          // 3. Grid Panduan Komposisi Lembut
           IgnorePointer(
             child: CustomPaint(
               painter: _ClassroomGridPainter(),
             ),
           ),
 
-          // 3. Header Info Sesi & Kuota Capture
+          // 4. Header Info Sesi & Indikator Wajah Terdeteksi
           Positioned(
             top: 16,
             left: 16,
             right: 16,
-            child: sessionAsync.when(
-              data: (session) => Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.65),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white24),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            session.activityName,
+            child: Column(
+              children: [
+                sessionAsync.when(
+                  data: (session) => Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.7),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                session.activityName,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                'P${session.meetingNumber} • ${session.participants.length} Mahasiswa',
+                                style: const TextStyle(color: Colors.white70, fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.indigoAccent,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            'Foto: ${session.captureCount} / ${session.maxCaptures}',
                             style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
-                              fontSize: 14,
+                              fontSize: 12,
                             ),
-                            overflow: TextOverflow.ellipsis,
                           ),
-                          Text(
-                            'P${session.meetingNumber} • ${session.participants.length} Mahasiswa',
-                            style: const TextStyle(color: Colors.white70, fontSize: 12),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.indigoAccent,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        'Foto: ${session.captureCount} / ${session.maxCaptures}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
+                  ),
+                  loading: () => const SizedBox.shrink(),
+                  error: (_, _) => const SizedBox.shrink(),
+                ),
+                const SizedBox(height: 8),
+
+                // Live Chip: Jumlah Wajah Terdeteksi Live ("Bunder-Bunder Wajah")
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _detectedFaceRects.isNotEmpty
+                        ? const Color(0xCC064E3B)
+                        : Colors.black.withValues(alpha: 0.6),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: _detectedFaceRects.isNotEmpty
+                          ? const Color(0xFF10B981)
+                          : Colors.white24,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: _detectedFaceRects.isNotEmpty
+                              ? const Color(0xFF10B981)
+                              : Colors.grey,
                         ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 8),
+                      Text(
+                        _detectedFaceRects.isNotEmpty
+                            ? 'Live AI: ${_detectedFaceRects.length} Wajah Terdeteksi'
+                            : 'Mencari wajah mahasiswa di kelas...',
+                        style: TextStyle(
+                          color: _detectedFaceRects.isNotEmpty
+                              ? const Color(0xFF6EE7B7)
+                              : Colors.white70,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              loading: () => const SizedBox.shrink(),
-              error: (_, _) => const SizedBox.shrink(),
+              ],
             ),
           ),
 
-          // 4. Petunjuk Komposisi Bawah
+          // 5. Petunjuk Komposisi Bawah
           Positioned(
-            bottom: 120,
+            bottom: 116,
             left: 20,
             right: 20,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.6),
+                color: Colors.black.withValues(alpha: 0.7),
                 borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.white12),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.info_outline, color: Colors.amber, size: 16),
-                  SizedBox(width: 8),
+                  Icon(
+                    _detectedFaceRects.isNotEmpty ? Icons.check_circle : Icons.info_outline,
+                    color: _detectedFaceRects.isNotEmpty ? const Color(0xFF10B981) : Colors.amber,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 8),
                   Flexible(
                     child: Text(
-                      'Arahkan kamera ke seluruh mahasiswa dalam kelas',
-                      style: TextStyle(color: Colors.white, fontSize: 12),
+                      _detectedFaceRects.isNotEmpty
+                          ? 'Wajah ditandai lingkaran live. Tekan tombol kamera untuk mengenali!'
+                          : 'Arahkan kamera ke seluruh mahasiswa dalam ruangan kelas',
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
                       textAlign: TextAlign.center,
                     ),
                   ),
@@ -377,9 +575,9 @@ class _AttendanceCameraScreenState
             ),
           ),
 
-          // 5. Tombol Shutter Bawah
+          // 6. Tombol Shutter Bawah
           Positioned(
-            bottom: 30,
+            bottom: 26,
             left: 0,
             right: 0,
             child: Center(
@@ -387,7 +585,7 @@ class _AttendanceCameraScreenState
                   ? Container(
                       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                       decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.8),
+                        color: Colors.black.withValues(alpha: 0.85),
                         borderRadius: BorderRadius.circular(30),
                         border: Border.all(color: Colors.indigoAccent),
                       ),
@@ -423,21 +621,30 @@ class _AttendanceCameraScreenState
                         height: 76,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 4),
-                          color: Colors.white24,
+                          border: Border.all(
+                            color: _detectedFaceRects.isNotEmpty
+                                ? const Color(0xFF10B981)
+                                : Colors.white,
+                            width: 4,
+                          ),
+                          color: _detectedFaceRects.isNotEmpty
+                              ? const Color(0x3310B981)
+                              : Colors.white24,
                         ),
                         child: Center(
                           child: Container(
                             width: 60,
                             height: 60,
-                            decoration: const BoxDecoration(
+                            decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: Colors.white,
+                              color: _detectedFaceRects.isNotEmpty
+                                  ? const Color(0xFF10B981)
+                                  : Colors.white,
                             ),
-                            child: const Icon(
+                            child: Icon(
                               Icons.camera_alt,
                               size: 32,
-                              color: Colors.indigo,
+                              color: _detectedFaceRects.isNotEmpty ? Colors.white : Colors.indigo,
                             ),
                           ),
                         ),
@@ -451,11 +658,90 @@ class _AttendanceCameraScreenState
   }
 }
 
+class _LiveFacesPainter extends CustomPainter {
+  final List<Rect> faces;
+  final Size imageSize;
+  final InputImageRotation rotation;
+  final bool isFrontCamera;
+
+  _LiveFacesPainter({
+    required this.faces,
+    required this.imageSize,
+    required this.rotation,
+    required this.isFrontCamera,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final ringPaint = Paint()
+      ..color = const Color(0xFF10B981)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5;
+
+    final glowPaint = Paint()
+      ..color = const Color(0x4410B981)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 5.0;
+
+    final dotPaint = Paint()
+      ..color = const Color(0xFF6EE7B7)
+      ..style = PaintingStyle.fill;
+
+    // Hitung orientasi rotasi kamera terhadap canvas layar
+    final bool isRotated = rotation == InputImageRotation.rotation90deg ||
+        rotation == InputImageRotation.rotation270deg;
+
+    final double sourceWidth = isRotated ? imageSize.height : imageSize.width;
+    final double sourceHeight = isRotated ? imageSize.width : imageSize.height;
+
+    final double scaleX = size.width / sourceWidth;
+    final double scaleY = size.height / sourceHeight;
+
+    for (final faceRect in faces) {
+      double left = faceRect.left;
+      double top = faceRect.top;
+      double right = faceRect.right;
+      double bottom = faceRect.bottom;
+
+      // Transformasi koordinat sesuai orientasi dan kamera depan/belakang
+      if (isFrontCamera) {
+        final mirroredLeft = sourceWidth - right;
+        final mirroredRight = sourceWidth - left;
+        left = mirroredLeft;
+        right = mirroredRight;
+      }
+
+      final double renderLeft = left * scaleX;
+      final double renderTop = top * scaleY;
+      final double renderWidth = (right - left).abs() * scaleX;
+      final double renderHeight = (bottom - top).abs() * scaleY;
+
+      final center = Offset(renderLeft + renderWidth / 2, renderTop + renderHeight / 2);
+      final radius = max(renderWidth, renderHeight) * 0.58;
+
+      // Gambar lingkaran luar glow & lingkaran utama ("Bunder-bunder Wajah")
+      canvas.drawCircle(center, radius + 2, glowPaint);
+      canvas.drawCircle(center, radius, ringPaint);
+
+      // Gambar 4 titik target penanda di sekeliling lingkaran
+      canvas.drawCircle(Offset(center.dx, center.dy - radius), 3.0, dotPaint);
+      canvas.drawCircle(Offset(center.dx, center.dy + radius), 3.0, dotPaint);
+      canvas.drawCircle(Offset(center.dx - radius, center.dy), 3.0, dotPaint);
+      canvas.drawCircle(Offset(center.dx + radius, center.dy), 3.0, dotPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _LiveFacesPainter oldDelegate) {
+    return oldDelegate.faces != faces || oldDelegate.isFrontCamera != isFrontCamera;
+  }
+}
+
 class _ClassroomGridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.15)
+      ..color = Colors.white.withValues(alpha: 0.12)
       ..strokeWidth = 1.0
       ..style = PaintingStyle.stroke;
 
