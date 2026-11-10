@@ -216,31 +216,64 @@ flowchart TD
 
 ## 🔌 Mode Konektivitas Jaringan (USB vs Wi-Fi LAN)
 
-Aplikasi memiliki menu pengaturan alamat IP server yang dapat diakses melalui ikon gerigi ⚙️ di pojok kanan atas layar login:
+Aplikasi memiliki menu pengaturan alamat IP server yang dapat diakses melalui ikon gerigi ⚙️ di pojok kanan atas layar login. Anda dapat memilih antara **Mode USB** atau **Mode Wi-Fi**:
 
-### ⚡ Opsi 1: Mode USB Kabel (ADB Reverse) — Paling Stabil & 100% Offline
+---
+
+### ⚡ Opsi 1: Mode USB Kabel (Paling Stabil & 100% Offline Tanpa Kuota)
 Sangat cocok untuk lingkungan kampus dengan jaringan Wi-Fi berkeamanan tinggi yang memblokir komunikasi antardevice (*AP Client Isolation*).
-1. Hubungkan HP ke laptop via kabel USB data (aktifkan USB Debugging).
-2. Jalankan perintah port forward di PowerShell laptop:
-   ```powershell
-   adb reverse tcp:8000 tcp:8000
-   ```
-3. Di aplikasi HP, buka menu **Pengaturan Server** (ikon ⚙️) -> masukkan URL:
-   ```text
-   http://127.0.0.1:8000
-   ```
-4. Tekan **Simpan & Tes Koneksi** hingga muncul notifikasi hijau `Koneksi Berhasil!`.
+
+* **Cara Instan (Tinggal Dobel Klik):**
+  1. Dobel klik file **`JALANKAN_SERVER.bat`** di folder utama laptop.
+  2. Hubungkan HP ke laptop dengan kabel data (USB Debugging aktif).
+  3. Dobel klik file **`HUBUNGKAN_USB.bat`** di folder utama laptop.
+  4. Di HP Anda: Buka Pengaturan Server (⚙️) -> masukkan `http://127.0.0.1:8000` -> Tekan **Simpan & Tes Koneksi**.
+
+* **Cara Manual via CMD (Command Prompt / PowerShell):**
+  1. Buka CMD / Terminal 1:
+     ```cmd
+     cd /d d:\apilkasi-absensi\backend
+     .venv\Scripts\activate.bat
+     uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+     ```
+  2. Buka CMD / Terminal 2 (hubungkan port USB):
+     ```cmd
+     adb reverse tcp:8000 tcp:8000
+     ```
+  3. Di aplikasi HP: Buka menu **Pengaturan Server** (ikon ⚙️) -> masukkan URL:
+     ```text
+     http://127.0.0.1:8000
+     ```
+  4. Tekan **Simpan & Tes Koneksi** hingga muncul notifikasi hijau `Koneksi Berhasil!`.
+
+---
 
 ### 📶 Opsi 2: Mode Wi-Fi Lokal / LAN (Nirkabel Penuh Tanpa Kabel)
-Cocok digunakan jika laptop dan HP terhubung pada satu router Wi-Fi yang sama (atau Laptop tersambung ke Hotspot HP):
-1. Cek alamat IP lokal laptop Anda melalui `ipconfig` pada adapter Wi-Fi:
-   *(Format: `192.168.***.***`)*
-2. Di aplikasi HP, buka menu **Pengaturan Server** (ikon ⚙️) -> masukkan URL Wi-Fi laptop:
-   ```text
-   http://192.168.***.***:8000
-   ```
-   *(Ganti `***.***` dengan angka segmen IP Wi-Fi laptop Anda)*
-3. Tekan **Simpan & Tes Koneksi** hingga muncul notifikasi hijau `Koneksi Berhasil!`.
+Cocok digunakan jika laptop dan HP terhubung pada satu jaringan Wi-Fi yang sama (atau Laptop tersambung ke Hotspot HP):
+
+* **Cara Instan (Tinggal Dobel Klik):**
+  1. Dobel klik file **`JALANKAN_SERVER.bat`** di folder utama laptop.
+  2. Cek IP Wi-Fi laptop di CMD (`ipconfig`).
+  3. Di HP Anda: Buka Pengaturan Server (⚙️) -> masukkan `http://192.168.***.***:8000` -> Tekan **Simpan & Tes Koneksi**.
+
+* **Cara Manual via CMD (Command Prompt / PowerShell):**
+  1. Buka CMD / Terminal:
+     ```cmd
+     cd /d d:\apilkasi-absensi\backend
+     .venv\Scripts\activate.bat
+     uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+     ```
+  2. Cek alamat IP lokal Wi-Fi laptop melalui `ipconfig`:
+     ```cmd
+     ipconfig
+     ```
+     *(Lihat pada bagian Wireless LAN adapter Wi-Fi: IPv4 Address: `192.168.***.***`)*
+  3. Di aplikasi HP: Buka menu **Pengaturan Server** (ikon ⚙️) -> masukkan URL:
+     ```text
+     http://192.168.***.***:8000
+     ```
+     *(Ganti `***.***` dengan angka segmen IP Wi-Fi laptop Anda)*
+  4. Tekan **Simpan & Tes Koneksi** hingga muncul notifikasi hijau `Koneksi Berhasil!`.
 
 ---
 
@@ -265,6 +298,8 @@ Cocok digunakan jika laptop dan HP terhubung pada satu router Wi-Fi yang sama (a
 ```text
 apilkasi-absensi/
 ├── SnapAttend-v3.apk               # File Rilis Final Siap Install Android
+├── JALANKAN_SERVER.bat             # Dobel Klik untuk Menjalankan Backend Otomatis
+├── HUBUNGKAN_USB.bat               # Dobel Klik untuk Menghubungkan Port USB (ADB)
 ├── backend/                        # Layanan Backend AI (Python / FastAPI)
 │   ├── app/
 │   │   ├── core/                   # Konfigurasi, Database Engine, & Keamanan
