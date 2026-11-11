@@ -144,7 +144,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             LuxuryCard(
               margin: const EdgeInsets.only(bottom: 12),
               onTap: () {
-                _urlController.text = 'http://192.168.1.32:8000';
+                _urlController.text = 'http://10.210.65.85:8000';
                 _testConnection();
               },
               child: Row(
@@ -163,12 +163,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Wi-Fi Laptop (192.168.1.32)',
+                          'Wi-Fi Laptop (10.210.65.85)',
                           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white),
                         ),
                         SizedBox(height: 2),
                         Text(
-                          'http://192.168.1.32:8000 (Mode Nirkabel/Tanpa Kabel)',
+                          'http://10.210.65.85:8000 (Mode Nirkabel/Wi-Fi)',
                           style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
                         ),
                       ],

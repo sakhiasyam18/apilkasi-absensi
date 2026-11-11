@@ -11,12 +11,15 @@ class SettingsRepository {
   final SharedPreferences _prefs;
   SettingsRepository(this._prefs);
 
-  // Default ke koneksi USB (127.0.0.1:8000 via ADB reverse)
+  // Default otomatis ke Wi-Fi laptop aktif
   String get baseUrl {
     final saved = _prefs.getString('backend_base_url');
-    // Jika masih null atau masih tersimpan IP Wi-Fi lama, gunakan default port USB
-    if (saved == null || saved == 'http://192.168.1.32:8000') {
-      return 'http://127.0.0.1:8000';
+    if (saved == null ||
+        saved.isEmpty ||
+        saved == 'http://192.168.1.32:8000' ||
+        saved == 'http://192.168.176.85:8000' ||
+        saved == 'http://192.168.216.85:8000') {
+      return 'http://10.210.65.85:8000';
     }
     return saved;
   }

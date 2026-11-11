@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/config/settings_repository.dart';
 import '../../../core/widgets/luxury_card.dart';
 import '../../../core/widgets/primary_button.dart';
 import 'auth_state.dart';
@@ -71,28 +72,38 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: AppColors.cardSurface,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.35), width: 1),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(Icons.usb_rounded, color: AppColors.primary, size: 16),
-                          SizedBox(width: 6),
-                          Text(
-                            'Mode Port USB Aktif',
-                            style: TextStyle(
-                              color: AppColors.primaryLight,
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w600,
-                            ),
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final currentUrl = ref.watch(settingsRepositoryProvider).baseUrl;
+                        final isUsb = currentUrl.contains('127.0.0.1');
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: AppColors.cardSurface,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.35), width: 1),
                           ),
-                        ],
-                      ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                isUsb ? Icons.usb_rounded : Icons.wifi_rounded,
+                                color: AppColors.primary,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                isUsb ? 'Mode USB Aktif' : 'Mode Wi-Fi Aktif',
+                                style: const TextStyle(
+                                  color: AppColors.primaryLight,
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
                     IconButton(
                       icon: const Icon(Icons.settings_outlined, color: AppColors.textSecondary),
