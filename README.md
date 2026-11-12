@@ -1,8 +1,8 @@
-# 🎓 SnapAttend V3 — Sistem Presensi Wajah Cerdas Berbasis AI (InsightFace & Edge Sensor HUD)
+# 🎓 SnapAttend V3.2.5 — Sistem Presensi Wajah Cerdas Berbasis AI (InsightFace & Edge Sensor HUD)
 
 <div align="center">
 
-![SnapAttend Release](https://img.shields.io/badge/Release-SnapAttend--v3.apk-00C853?style=for-the-badge&logo=android&logoColor=white)
+![SnapAttend Release](https://img.shields.io/badge/Release-SnapAttend--v3.2.5.apk-00C853?style=for-the-badge&logo=android&logoColor=white)
 ![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?style=for-the-badge&logo=flutter&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?style=for-the-badge&logo=fastapi&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)
@@ -216,7 +216,12 @@ flowchart TD
 
 ## 🔌 Mode Konektivitas Jaringan (USB vs Wi-Fi LAN)
 
-Aplikasi memiliki menu pengaturan alamat IP server yang dapat diakses melalui ikon gerigi ⚙️ di pojok kanan atas layar login. Anda dapat memilih antara **Mode USB** atau **Mode Wi-Fi**:
+Aplikasi memiliki menu pengaturan alamat IP server yang dapat diakses melalui ikon gerigi ⚙️ di pojok kanan atas layar login.
+
+> [!NOTE]
+> **Konsep Alamat IP (Dinamis vs Statis):**
+> * **Mode Wi-Fi / Hotspot (Dinamis - DHCP)**: Setiap kali laptop berpindah jaringan (misal dari Wi-Fi kampus ke Hotspot HP atau Wi-Fi rumah), router memberikan alamat IP baru yang berbeda-beda secara otomatis.
+> * **Mode USB Kabel (Statis & Permanen)**: Alamat URL selalu tetap di **`http://127.0.0.1:8000`**, tidak pernah berubah meskipun Anda berpindah Wi-Fi atau tanpa internet sekalipun.
 
 ---
 
@@ -251,29 +256,32 @@ Sangat cocok untuk lingkungan kampus dengan jaringan Wi-Fi berkeamanan tinggi ya
 ### 📶 Opsi 2: Mode Wi-Fi Lokal / LAN (Nirkabel Penuh Tanpa Kabel)
 Cocok digunakan jika laptop dan HP terhubung pada satu jaringan Wi-Fi yang sama (atau Laptop tersambung ke Hotspot HP):
 
-* **Cara Instan (Tinggal Dobel Klik):**
+* **Cara Instan (Deteksi IP Otomatis via BAT):**
   1. Dobel klik file **`JALANKAN_SERVER.bat`** di folder utama laptop.
-  2. Cek IP Wi-Fi laptop di CMD (`ipconfig`).
-  3. Di HP Anda: Buka Pengaturan Server (⚙️) -> masukkan `http://192.168.***.***:8000` -> Tekan **Simpan & Tes Koneksi**.
-
-* **Cara Manual via CMD (Command Prompt / PowerShell):**
-  1. Buka CMD / Terminal:
-     ```cmd
-     cd /d d:\apilkasi-absensi\backend
-     .venv\Scripts\activate.bat
-     uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+  2. Jendela CMD akan **secara otomatis mendeteksi dan menampilkan alamat IP Wi-Fi laptop Anda saat ini**, contoh:
+     ```text
+     Alamat URL Server untuk Aplikasi HP:
+       [1] Mode USB Kabel : http://127.0.0.1:8000  (Selalu Tetap / Statis)
+       [2] Mode Wi-Fi     : http://192.168.***.***:8000  (Terdeteksi Otomatis!)
      ```
-  2. Cek alamat IP lokal Wi-Fi laptop melalui `ipconfig`:
+  3. Di HP Anda: Buka Pengaturan Server (⚙️) -> masukkan URL Wi-Fi yang tertera di layar CMD tersebut -> Tekan **Simpan & Tes Koneksi**.
+
+* **Cara Menangkap / Cek Alamat IP Manual via `ipconfig`:**
+  Jika ingin mengecek atau menangkap IP secara manual:
+  1. Buka CMD di laptop Anda.
+  2. Ketik perintah:
      ```cmd
      ipconfig
      ```
-     *(Lihat pada bagian Wireless LAN adapter Wi-Fi: IPv4 Address: `192.168.***.***`)*
-  3. Di aplikasi HP: Buka menu **Pengaturan Server** (ikon ⚙️) -> masukkan URL:
+  3. Cari bagian adapter yang sedang aktif digunakan:
+     * Jika menggunakan Wi-Fi / Hotspot: Cari bagian **`Wireless LAN adapter Wi-Fi:`**
+     * Lihat baris bertuliskan **`IPv4 Address. . . . . . . . . . . : 192.168.***.***`**
+     *(Catatan: Jangan gunakan IP `169.254.***.***` karena itu adalah IP fallback saat koneksi belum terhubung).*
+  4. Masukkan alamat IP tersebut ke HP Anda dengan format:
      ```text
      http://192.168.***.***:8000
      ```
-     *(Ganti `***.***` dengan angka segmen IP Wi-Fi laptop Anda)*
-  4. Tekan **Simpan & Tes Koneksi** hingga muncul notifikasi hijau `Koneksi Berhasil!`.
+  5. Tekan **Simpan & Tes Koneksi** hingga muncul notifikasi hijau `Koneksi Berhasil!`.
 
 ---
 

@@ -49,6 +49,17 @@ class DosenProfileTab extends ConsumerWidget {
 
               // Logout Button
               _buildLogoutButton(context, ref),
+              const SizedBox(height: 18),
+              const Center(
+                child: Text(
+                  'SnapAttend v3.2.5 • Universitas Negeri Malang (UM)',
+                  style: TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
               const SizedBox(height: 20),
             ],
           ),

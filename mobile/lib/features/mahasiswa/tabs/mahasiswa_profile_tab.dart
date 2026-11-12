@@ -48,6 +48,17 @@ class MahasiswaProfileTab extends ConsumerWidget {
               _buildSectionTitle('Menu Profile'),
               const SizedBox(height: 12),
               _buildMenuCard(context, ref),
+              const SizedBox(height: 20),
+              const Center(
+                child: Text(
+                  'SnapAttend v3.2.5 • Universitas Negeri Malang (UM)',
+                  style: TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
               const SizedBox(height: 30),
             ],
           ),

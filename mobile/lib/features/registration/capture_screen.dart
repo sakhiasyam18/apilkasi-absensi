@@ -14,32 +14,77 @@ import '../../core/utils/image_prep.dart';
 import '../../core/utils/image_quality.dart';
 import '../../services/upload_queue/queue_worker.dart';
 
+/// Status evaluasi sumbu geometris wajah (Gradasi 3 Warna)
+enum AxisState {
+  pass, // HIJAU (Pas): Sudah berada dalam batas toleransi target
+  warn, // KUNING (Sedikit lagi / Mendekati): Hampir pas, tinggal sedikit penyesuaian
+  fail, // MERAH (Kurang / Jauh): Masih jauh atau arah berlawanan
+}
+
+Color getAxisColor(AxisState state) {
+  switch (state) {
+    case AxisState.pass:
+      return const Color(0xFF10B981); // Emerald Green
+    case AxisState.warn:
+      return const Color(0xFFF59E0B); // Amber Yellow
+    case AxisState.fail:
+      return const Color(0xFFEF4444); // Coral Red
+  }
+}
+
+String getAxisBadgeText(AxisState state) {
+  switch (state) {
+    case AxisState.pass:
+      return 'PAS';
+    case AxisState.warn:
+      return 'SEDIKIT LAGI';
+    case AxisState.fail:
+      return 'KURANG';
+  }
+}
+
 class PoseTarget {
   final String label;
   final String title;
   final String instruction;
   final IconData icon;
+  final IconData directionIcon;
   final String targetXText; // e.g. "Pitch: ±15°"
   final String targetYText; // e.g. "Yaw: ±15°"
   final String targetZText; // e.g. "Roll: ±18° | Jarak ≥18%"
-  final bool Function(double yaw, double pitch, double roll, double distRatio) isMatch;
-  final bool Function(double pitch) isXMatch;
-  final bool Function(double yaw) isYMatch;
-  final bool Function(double roll, double distRatio) isZMatch;
+  final AxisState Function(double pitch) checkX;
+  final AxisState Function(double yaw) checkY;
+  final AxisState Function(double roll, double distRatio) checkZ;
+  final String Function(
+    double yaw,
+    double pitch,
+    double roll,
+    double distRatio,
+    AxisState stateX,
+    AxisState stateY,
+    AxisState stateZ,
+  ) dynamicGuide;
 
   const PoseTarget({
     required this.label,
     required this.title,
     required this.instruction,
     required this.icon,
+    required this.directionIcon,
     required this.targetXText,
     required this.targetYText,
     required this.targetZText,
-    required this.isMatch,
-    required this.isXMatch,
-    required this.isYMatch,
-    required this.isZMatch,
+    required this.checkX,
+    required this.checkY,
+    required this.checkZ,
+    required this.dynamicGuide,
   });
+
+  bool isAllPass(double yaw, double pitch, double roll, double distRatio) {
+    return checkX(pitch) == AxisState.pass &&
+        checkY(yaw) == AxisState.pass &&
+        checkZ(roll, distRatio) == AxisState.pass;
+  }
 }
 
 final List<PoseTarget> kPoseTargets = [
@@ -48,82 +93,191 @@ final List<PoseTarget> kPoseTargets = [
     title: '1. Hadap Depan',
     instruction: 'Posisikan wajah lurus menghadap kamera',
     icon: Icons.face,
+    directionIcon: Icons.center_focus_strong,
     targetXText: '±15°',
     targetYText: '±15°',
     targetZText: 'Roll ±18° | Jarak ≥18%',
-    isXMatch: (pitch) => pitch.abs() <= 16,
-    isYMatch: (yaw) => yaw.abs() <= 16,
-    isZMatch: (roll, dist) => roll.abs() <= 18 && dist >= 0.18,
-    isMatch: (yaw, pitch, roll, dist) =>
-        yaw.abs() <= 16 && pitch.abs() <= 16 && roll.abs() <= 18 && dist >= 0.18,
+    checkX: (pitch) {
+      final p = pitch.abs();
+      if (p <= 15) return AxisState.pass;
+      if (p <= 24) return AxisState.warn;
+      return AxisState.fail;
+    },
+    checkY: (yaw) {
+      final y = yaw.abs();
+      if (y <= 15) return AxisState.pass;
+      if (y <= 24) return AxisState.warn;
+      return AxisState.fail;
+    },
+    checkZ: (roll, dist) {
+      if (roll.abs() <= 18 && dist >= 0.18) return AxisState.pass;
+      if (roll.abs() <= 28 && dist >= 0.12) return AxisState.warn;
+      return AxisState.fail;
+    },
+    dynamicGuide: (yaw, pitch, roll, dist, stateX, stateY, stateZ) {
+      if (dist < 0.14) return 'Dekatkan wajah sedikit ke kamera 📱';
+      if (roll.abs() > 22) return 'Tegakkan posisi kepala (jangan miring) ⚖️';
+      if (stateX == AxisState.fail) {
+        return pitch > 15 ? 'Tundukkan kepala sedikit ⬇️' : 'Angkat dagu sedikit ⬆️';
+      }
+      if (stateY == AxisState.fail) {
+        return yaw > 15
+            ? 'Luruskan ke tengah (kurangi ke kanan) ⬅️'
+            : 'Luruskan ke tengah (kurangi ke kiri) ➡️';
+      }
+      if (stateX == AxisState.warn || stateY == AxisState.warn) {
+        return 'Sedikit lagi! Luruskan pandangan tepat ke tengah';
+      }
+      return 'POSISI PAS! Tahan sejenak... 🔒';
+    },
   ),
   PoseTarget(
     label: 'kiri',
     title: '2. Tengok Kiri',
     instruction: 'Tengokkan kepala sedikit ke kiri',
     icon: Icons.turn_left,
+    directionIcon: Icons.arrow_circle_left_rounded,
     targetXText: '±20°',
-    targetYText: '8° s/d 45° (Kiri)',
+    targetYText: '10° s/d 42° (Kiri)',
     targetZText: 'Roll ±20° | Jarak ≥18%',
-    isXMatch: (pitch) => pitch.abs() <= 20,
-    isYMatch: (yaw) => (yaw >= -45 && yaw <= -8) || (yaw >= 8 && yaw <= 45),
-    isZMatch: (roll, dist) => roll.abs() <= 20 && dist >= 0.18,
-    isMatch: (yaw, pitch, roll, dist) =>
-        ((yaw >= -45 && yaw <= -8) || (yaw >= 8 && yaw <= 45)) &&
-        pitch.abs() <= 20 &&
-        roll.abs() <= 20 &&
-        dist >= 0.18,
+    checkX: (pitch) {
+      final p = pitch.abs();
+      if (p <= 20) return AxisState.pass;
+      if (p <= 28) return AxisState.warn;
+      return AxisState.fail;
+    },
+    checkY: (yaw) {
+      final absY = yaw.abs();
+      if (absY >= 10 && absY <= 42) return AxisState.pass;
+      if ((absY >= 4 && absY < 10) || (absY > 42 && absY <= 50)) return AxisState.warn;
+      return AxisState.fail;
+    },
+    checkZ: (roll, dist) {
+      if (roll.abs() <= 20 && dist >= 0.18) return AxisState.pass;
+      if (roll.abs() <= 28 && dist >= 0.12) return AxisState.warn;
+      return AxisState.fail;
+    },
+    dynamicGuide: (yaw, pitch, roll, dist, stateX, stateY, stateZ) {
+      if (dist < 0.14) return 'Dekatkan wajah sedikit ke kamera 📱';
+      final absY = yaw.abs();
+      if (absY < 5) return 'Tengokkan kepala ke KIRI ⬅️';
+      if (absY < 10) return 'Tengok ke KIRI sedikit lagi ⬅️';
+      if (absY > 42) return 'Kurangi tengokan ke kiri (sedikit ke tengah) ➡️';
+      if (stateX != AxisState.pass) {
+        return pitch > 20 ? 'Tundukkan kepala sedikit ⬇️' : 'Angkat dagu sedikit ⬆️';
+      }
+      return 'POSISI PAS! Tahan posisi tengok kiri... 🔒';
+    },
   ),
   PoseTarget(
     label: 'kanan',
     title: '3. Tengok Kanan',
     instruction: 'Tengokkan kepala sedikit ke kanan',
     icon: Icons.turn_right,
+    directionIcon: Icons.arrow_circle_right_rounded,
     targetXText: '±20°',
-    targetYText: '8° s/d 45° (Kanan)',
+    targetYText: '10° s/d 42° (Kanan)',
     targetZText: 'Roll ±20° | Jarak ≥18%',
-    isXMatch: (pitch) => pitch.abs() <= 20,
-    isYMatch: (yaw) => (yaw >= 8 && yaw <= 45) || (yaw >= -45 && yaw <= -8),
-    isZMatch: (roll, dist) => roll.abs() <= 20 && dist >= 0.18,
-    isMatch: (yaw, pitch, roll, dist) =>
-        ((yaw >= 8 && yaw <= 45) || (yaw >= -45 && yaw <= -8)) &&
-        pitch.abs() <= 20 &&
-        roll.abs() <= 20 &&
-        dist >= 0.18,
+    checkX: (pitch) {
+      final p = pitch.abs();
+      if (p <= 20) return AxisState.pass;
+      if (p <= 28) return AxisState.warn;
+      return AxisState.fail;
+    },
+    checkY: (yaw) {
+      final absY = yaw.abs();
+      if (absY >= 10 && absY <= 42) return AxisState.pass;
+      if ((absY >= 4 && absY < 10) || (absY > 42 && absY <= 50)) return AxisState.warn;
+      return AxisState.fail;
+    },
+    checkZ: (roll, dist) {
+      if (roll.abs() <= 20 && dist >= 0.18) return AxisState.pass;
+      if (roll.abs() <= 28 && dist >= 0.12) return AxisState.warn;
+      return AxisState.fail;
+    },
+    dynamicGuide: (yaw, pitch, roll, dist, stateX, stateY, stateZ) {
+      if (dist < 0.14) return 'Dekatkan wajah sedikit ke kamera 📱';
+      final absY = yaw.abs();
+      if (absY < 5) return 'Tengokkan kepala ke KANAN ➡️';
+      if (absY < 10) return 'Tengok ke KANAN sedikit lagi ➡️';
+      if (absY > 42) return 'Kurangi tengokan ke kanan (sedikit ke tengah) ⬅️';
+      if (stateX != AxisState.pass) {
+        return pitch > 20 ? 'Tundukkan kepala sedikit ⬇️' : 'Angkat dagu sedikit ⬆️';
+      }
+      return 'POSISI PAS! Tahan posisi tengok kanan... 🔒';
+    },
   ),
   PoseTarget(
     label: 'atas',
     title: '4. Angkat Dagu',
     instruction: 'Angkat dagu sedikit ke atas',
     icon: Icons.arrow_upward,
-    targetXText: '+6° s/d +35° (Atas)',
-    targetYText: '±25°',
+    directionIcon: Icons.arrow_circle_up_rounded,
+    targetXText: '+8° s/d +35° (Atas)',
+    targetYText: '±22°',
     targetZText: 'Roll ±20° | Jarak ≥18%',
-    isXMatch: (pitch) => (pitch >= 6 && pitch <= 35) || (pitch <= -6 && pitch >= -35),
-    isYMatch: (yaw) => yaw.abs() <= 25,
-    isZMatch: (roll, dist) => roll.abs() <= 20 && dist >= 0.18,
-    isMatch: (yaw, pitch, roll, dist) =>
-        ((pitch >= 6 && pitch <= 35) || (pitch <= -6 && pitch >= -35)) &&
-        yaw.abs() <= 25 &&
-        roll.abs() <= 20 &&
-        dist >= 0.18,
+    checkX: (pitch) {
+      final absP = pitch.abs();
+      if (absP >= 7 && absP <= 35) return AxisState.pass;
+      if ((absP >= 3 && absP < 7) || (absP > 35 && absP <= 45)) return AxisState.warn;
+      return AxisState.fail;
+    },
+    checkY: (yaw) {
+      final y = yaw.abs();
+      if (y <= 22) return AxisState.pass;
+      if (y <= 30) return AxisState.warn;
+      return AxisState.fail;
+    },
+    checkZ: (roll, dist) {
+      if (roll.abs() <= 20 && dist >= 0.18) return AxisState.pass;
+      if (roll.abs() <= 28 && dist >= 0.12) return AxisState.warn;
+      return AxisState.fail;
+    },
+    dynamicGuide: (yaw, pitch, roll, dist, stateX, stateY, stateZ) {
+      if (dist < 0.14) return 'Dekatkan wajah sedikit ke kamera 📱';
+      final absP = pitch.abs();
+      if (absP < 4) return 'Angkat dagu ke ATAS ⬆️';
+      if (absP < 7) return 'Angkat dagu ke ATAS sedikit lagi ⬆️';
+      if (absP > 35) return 'Turunkan dagu sedikit (terlalu mendongak) ⬇️';
+      if (stateY != AxisState.pass) return 'Luruskan wajah ke depan sambil mendongak';
+      return 'POSISI PAS! Tahan posisi dagu di atas... 🔒';
+    },
   ),
   PoseTarget(
     label: 'bawah',
     title: '5. Tunduk Sedikit',
     instruction: 'Tundukkan kepala sedikit ke bawah',
     icon: Icons.arrow_downward,
-    targetXText: '-6° s/d -35° (Bawah)',
-    targetYText: '±25°',
+    directionIcon: Icons.arrow_circle_down_rounded,
+    targetXText: '-7° s/d -35° (Bawah)',
+    targetYText: '±22°',
     targetZText: 'Roll ±20° | Jarak ≥18%',
-    isXMatch: (pitch) => (pitch <= -6 && pitch >= -35) || (pitch >= 6 && pitch <= 35),
-    isYMatch: (yaw) => yaw.abs() <= 25,
-    isZMatch: (roll, dist) => roll.abs() <= 20 && dist >= 0.18,
-    isMatch: (yaw, pitch, roll, dist) =>
-        ((pitch <= -6 && pitch >= -35) || (pitch >= 6 && pitch <= 35)) &&
-        yaw.abs() <= 25 &&
-        roll.abs() <= 20 &&
-        dist >= 0.18,
+    checkX: (pitch) {
+      final absP = pitch.abs();
+      if (absP >= 7 && absP <= 35) return AxisState.pass;
+      if ((absP >= 3 && absP < 7) || (absP > 35 && absP <= 45)) return AxisState.warn;
+      return AxisState.fail;
+    },
+    checkY: (yaw) {
+      final y = yaw.abs();
+      if (y <= 22) return AxisState.pass;
+      if (y <= 30) return AxisState.warn;
+      return AxisState.fail;
+    },
+    checkZ: (roll, dist) {
+      if (roll.abs() <= 20 && dist >= 0.18) return AxisState.pass;
+      if (roll.abs() <= 28 && dist >= 0.12) return AxisState.warn;
+      return AxisState.fail;
+    },
+    dynamicGuide: (yaw, pitch, roll, dist, stateX, stateY, stateZ) {
+      if (dist < 0.14) return 'Dekatkan wajah sedikit ke kamera 📱';
+      final absP = pitch.abs();
+      if (absP < 4) return 'Tundukkan kepala ke BAWAH ⬇️';
+      if (absP < 7) return 'Tundukkan kepala sedikit lagi ⬇️';
+      if (absP > 35) return 'Angkat kepala sedikit (terlalu menunduk) ⬆️';
+      if (stateY != AxisState.pass) return 'Luruskan wajah ke depan sambil menunduk';
+      return 'POSISI PAS! Tahan posisi tunduk... 🔒';
+    },
   ),
 ];
 
@@ -161,13 +315,16 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
   int _currentPoseIndex = 0;
   final List<String> _capturedRawPaths = [];
 
-  // Status deteksi real-time Sumbu X, Y, Z
+  // Status deteksi real-time Sumbu X, Y, Z (Gradasi 3 Warna)
   int _facesDetectedCount = 0;
   bool _isFaceLargeEnough = false;
   bool _isPoseAligned = false;
-  bool _isXMatch = false;
-  bool _isYMatch = false;
-  bool _isZMatch = false;
+
+  AxisState _stateX = AxisState.fail;
+  AxisState _stateY = AxisState.fail;
+  AxisState _stateZ = AxisState.fail;
+  AxisState _overallState = AxisState.fail;
+
   double _currentYaw = 0.0;
   double _currentPitch = 0.0;
   double _currentRoll = 0.0;
@@ -177,6 +334,7 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
   // Countdown & Auto-capture progress (0.0 s/d 1.0)
   Timer? _countdownTicker;
   double _autoCaptureProgress = 0.0;
+  bool _showFlash = false;
 
   @override
   void initState() {
@@ -273,8 +431,8 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
     if (_isDetecting || _isCapturing || _faceDetector == null || curCam == null) return;
 
     final now = DateTime.now().millisecondsSinceEpoch;
-    // Throttle frame processing (~120 ms)
-    if (now - _lastFrameTime < 120) return;
+    // Throttle frame processing (~90ms untuk responsivitas halus dan live)
+    if (now - _lastFrameTime < 90) return;
     _lastFrameTime = now;
     _isDetecting = true;
 
@@ -294,11 +452,11 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
       final targetPose = kPoseTargets[_currentPoseIndex];
       final facesCount = faces.length;
 
+      AxisState sX = AxisState.fail;
+      AxisState sY = AxisState.fail;
+      AxisState sZ = AxisState.fail;
+      AxisState overall = AxisState.fail;
       bool largeEnough = false;
-      bool isX = false;
-      bool isY = false;
-      bool isZ = false;
-      bool aligned = false;
       double yaw = 0.0;
       double pitch = 0.0;
       double roll = 0.0;
@@ -306,45 +464,45 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
       String msg = '';
 
       if (facesCount == 0) {
-        msg = 'Posisikan wajah ke dalam area sensor kamera';
+        msg = 'Posisikan wajah ke dalam area oval kamera';
       } else if (facesCount > 1) {
-        msg = 'Terdeteksi $facesCount wajah. Pastikan hanya 1 wajah di depan kamera.';
+        msg = 'Terdeteksi $facesCount wajah. Pastikan hanya 1 orang di depan kamera.';
       } else {
         final face = faces.first;
         yaw = face.headEulerAngleY ?? 0.0;
         pitch = face.headEulerAngleX ?? 0.0;
         roll = face.headEulerAngleZ ?? 0.0;
 
-        // Ukuran wajah relatif terhadap frame
+        // Ukuran wajah relatif terhadap frame kamera
         final frameDim = (image.width < image.height ? image.width : image.height).toDouble();
         distRatio = frameDim > 0 ? (face.boundingBox.width / frameDim) : 0.0;
-
-        isX = targetPose.isXMatch(pitch);
-        isY = targetPose.isYMatch(yaw);
-        isZ = targetPose.isZMatch(roll, distRatio);
         largeEnough = distRatio >= 0.18;
-        aligned = targetPose.isMatch(yaw, pitch, roll, distRatio);
 
-        if (!largeEnough) {
-          msg = 'Dekatkan wajah sedikit ke kamera (Z-Distance kurang)';
-        } else if (aligned) {
-          msg = 'Target Terkunci! Mengambil foto otomatis...';
+        sX = targetPose.checkX(pitch);
+        sY = targetPose.checkY(yaw);
+        sZ = targetPose.checkZ(roll, distRatio);
+
+        if (sX == AxisState.pass && sY == AxisState.pass && sZ == AxisState.pass) {
+          overall = AxisState.pass;
+        } else if (sX == AxisState.fail || sY == AxisState.fail || sZ == AxisState.fail) {
+          overall = AxisState.fail;
         } else {
-          final List<String> pendingAxes = [];
-          if (!isX) pendingAxes.add('X (Pitch)');
-          if (!isY) pendingAxes.add('Y (Yaw)');
-          if (!isZ) pendingAxes.add('Z (Roll/Jarak)');
-          msg = '${targetPose.instruction} • Sesuaikan sumbu ${pendingAxes.join(', ')}';
+          overall = AxisState.warn;
         }
+
+        msg = targetPose.dynamicGuide(yaw, pitch, roll, distRatio, sX, sY, sZ);
       }
+
+      final bool aligned = overall == AxisState.pass && facesCount == 1;
 
       setState(() {
         _facesDetectedCount = facesCount;
         _isFaceLargeEnough = largeEnough;
         _isPoseAligned = aligned;
-        _isXMatch = isX;
-        _isYMatch = isY;
-        _isZMatch = isZ;
+        _stateX = sX;
+        _stateY = sY;
+        _stateZ = sZ;
+        _overallState = overall;
         _currentYaw = yaw;
         _currentPitch = pitch;
         _currentRoll = roll;
@@ -352,22 +510,27 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
         _statusMessage = msg;
       });
 
-      // Auto-Capture Countdown (~800ms) saat semua sumbu X, Y, Z terkunci
-      if (aligned && facesCount == 1 && !_isCapturing) {
+      // Auto-Capture Hands-Free: Countdown halus (~550ms) saat semua sumbu HIJAU (PAS)
+      if (aligned && !_isCapturing) {
         if (_countdownTicker == null || !_countdownTicker!.isActive) {
-          _countdownTicker = Timer.periodic(const Duration(milliseconds: 50), (timer) {
+          _countdownTicker = Timer.periodic(const Duration(milliseconds: 35), (timer) {
             if (!mounted) {
               timer.cancel();
               return;
             }
-            if (_isPoseAligned && !_isCapturing) {
+            if (_overallState == AxisState.pass && !_isCapturing) {
               setState(() {
-                _autoCaptureProgress = (_autoCaptureProgress + (50 / 800)).clamp(0.0, 1.0);
+                _autoCaptureProgress = (_autoCaptureProgress + (35 / 550)).clamp(0.0, 1.0);
               });
               if (_autoCaptureProgress >= 1.0) {
                 timer.cancel();
-                _takePhoto();
+                _triggerAutoCapture();
               }
+            } else if (_overallState == AxisState.warn) {
+              // Anti-Jitter: jika ada gerakan mikro sesaat, jangan langsung reset nol
+              setState(() {
+                _autoCaptureProgress = (_autoCaptureProgress - 0.06).clamp(0.0, 1.0);
+              });
             } else {
               timer.cancel();
               setState(() {
@@ -376,7 +539,7 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
             }
           });
         }
-      } else {
+      } else if (overall == AxisState.fail) {
         if (_countdownTicker?.isActive ?? false) {
           _countdownTicker?.cancel();
         }
@@ -390,6 +553,16 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
     } finally {
       _isDetecting = false;
     }
+  }
+
+  void _triggerAutoCapture() {
+    setState(() {
+      _showFlash = true;
+    });
+    Future.delayed(const Duration(milliseconds: 140), () {
+      if (mounted) setState(() => _showFlash = false);
+    });
+    _takePhoto();
   }
 
   InputImage? _buildInputImageFromCamera(CameraImage image, CameraDescription camera) {
@@ -434,7 +607,7 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
     setState(() {
       _isCapturing = true;
       _autoCaptureProgress = 0.0;
-      _statusMessage = 'Foto diambil! Memeriksa kualitas (anti-blur)...';
+      _statusMessage = 'Foto diambil otomatis! Memeriksa ketajaman citra...';
     });
 
     try {
@@ -471,12 +644,14 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
       _capturedRawPaths.add(xFile.path);
 
       if (_currentPoseIndex + 1 < kPoseTargets.length) {
-        // Lanjut ke pose berikutnya
+        // Lanjut ke pose berikutnya otomatis
         if (mounted) {
           setState(() {
             _currentPoseIndex++;
             _isCapturing = false;
             _isPoseAligned = false;
+            _autoCaptureProgress = 0.0;
+            _overallState = AxisState.fail;
           });
           await _cameraController!.startImageStream(_processCameraFrame);
         }
@@ -526,7 +701,7 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
         }
       }
 
-      // Coba kirim langsung ke server agar user mendapat konfirmasi verifikasi AI secara real-time
+      // Kirim langsung ke server FastAPI InsightFace
       final dio = ref.read(apiClientProvider);
       final formData = FormData();
       for (final filePath in compressedPaths) {
@@ -552,19 +727,19 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
           builder: (ctx) => AlertDialog(
             title: const Row(
               children: [
-                Icon(Icons.check_circle, color: Colors.green),
+                Icon(Icons.check_circle, color: Color(0xFF10B981)),
                 SizedBox(width: 8),
                 Expanded(child: Text('Wajah Berhasil Disimpan!')),
               ],
             ),
             content: Text(
-              'Kelima foto wajah untuk "${widget.studentName}" telah berhasil diverifikasi oleh AI InsightFace dan tersimpan di database server.\n\n'
+              'Kelima foto pose wajah untuk "${widget.studentName}" telah berhasil diverifikasi oleh AI InsightFace dan tersimpan di database server.\n\n'
               'Mahasiswa ini sekarang siap dideteksi otomatis saat presensi kelas.',
             ),
             actions: [
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.indigo,
+                  backgroundColor: const Color(0xFF10B981),
                   foregroundColor: Colors.white,
                 ),
                 onPressed: () {
@@ -587,7 +762,6 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
           e.type == DioExceptionType.receiveTimeout;
 
       if (isNetworkError) {
-        // Fallback ke antrean latar belakang jika offline
         final queueWorker = ref.read(queueWorkerProvider);
         await queueWorker.enqueueFaces(
           studentId: widget.studentId,
@@ -603,7 +777,7 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
           builder: (ctx) => AlertDialog(
             title: const Row(
               children: [
-                Icon(Icons.wifi_off, color: Colors.orange),
+                Icon(Icons.wifi_off, color: Color(0xFFF59E0B)),
                 SizedBox(width: 8),
                 Expanded(child: Text('Tersimpan di Antrean Offline')),
               ],
@@ -630,7 +804,7 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
           builder: (ctx) => AlertDialog(
             title: const Row(
               children: [
-                Icon(Icons.error_outline, color: Colors.red),
+                Icon(Icons.error_outline, color: Color(0xFFEF4444)),
                 SizedBox(width: 8),
                 Expanded(child: Text('Verifikasi AI Gagal')),
               ],
@@ -680,18 +854,20 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
     required String axisLabel,
     required String currentVal,
     required String targetVal,
-    required bool isMatch,
+    required AxisState state,
     required IconData icon,
   }) {
-    final color = isMatch ? const Color(0xFF10B981) : const Color(0xFFF59E0B);
+    final color = getAxisColor(state);
+    final badge = getAxisBadgeText(state);
+
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2.5),
+      padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         children: [
           Icon(icon, size: 14, color: color),
           const SizedBox(width: 6),
           SizedBox(
-            width: 78,
+            width: 76,
             child: Text(
               axisLabel,
               style: TextStyle(
@@ -715,7 +891,7 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
                     style: TextStyle(
                       color: color,
                       fontWeight: FontWeight.bold,
-                      fontSize: 11,
+                      fontSize: 11.5,
                     ),
                   ),
                   TextSpan(
@@ -734,14 +910,14 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
             ),
           ),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(4),
               border: Border.all(color: color.withValues(alpha: 0.6), width: 1),
             ),
             child: Text(
-              isMatch ? 'PAS' : 'SESUAIKAN',
+              badge,
               style: TextStyle(
                 color: color,
                 fontSize: 9.5,
@@ -754,20 +930,108 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
     );
   }
 
+  Widget _buildInstructionBanner(PoseTarget currentPose, AxisState overallState) {
+    final color = getAxisColor(overallState);
+    final isLocked = overallState == AxisState.pass;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      decoration: BoxDecoration(
+        color: const Color(0xDD0D1117),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color, width: isLocked ? 2.5 : 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: isLocked ? 0.45 : 0.2),
+            blurRadius: isLocked ? 16 : 8,
+            spreadRadius: isLocked ? 2 : 0,
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(9),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.16),
+              shape: BoxShape.circle,
+              border: Border.all(color: color.withValues(alpha: 0.4), width: 1.5),
+            ),
+            child: Icon(
+              currentPose.directionIcon,
+              color: color,
+              size: 26,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      currentPose.title.toUpperCase(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: color.withValues(alpha: 0.6), width: 1),
+                      ),
+                      child: Text(
+                        getAxisBadgeText(overallState),
+                        style: TextStyle(
+                          color: color,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  _statusMessage,
+                  style: TextStyle(
+                    color: isLocked ? const Color(0xFF10B981) : Colors.white.withValues(alpha: 0.9),
+                    fontSize: 12,
+                    fontWeight: isLocked ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildLiveSensorHud(PoseTarget currentPose) {
-    final isLocked = _isPoseAligned && _facesDetectedCount == 1 && _isFaceLargeEnough;
+    final isLocked = _overallState == AxisState.pass;
+    final color = getAxisColor(_overallState);
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: const Color(0xDD0D1117),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isLocked ? const Color(0xFF10B981) : Colors.white24,
+          color: isLocked ? const Color(0xFF10B981) : color.withValues(alpha: 0.6),
           width: isLocked ? 2 : 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: isLocked ? const Color(0x3310B981) : Colors.black45,
+            color: color.withValues(alpha: isLocked ? 0.35 : 0.15),
             blurRadius: 16,
             spreadRadius: 2,
           ),
@@ -784,10 +1048,10 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
                 height: 8,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: isLocked ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+                  color: color,
                   boxShadow: [
                     BoxShadow(
-                      color: (isLocked ? const Color(0xFF10B981) : const Color(0xFFF59E0B)).withValues(alpha: 0.8),
+                      color: color.withValues(alpha: 0.8),
                       blurRadius: 6,
                     ),
                   ],
@@ -807,22 +1071,22 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: (isLocked ? const Color(0xFF10B981) : Colors.blueGrey).withValues(alpha: 0.25),
+                  color: color.withValues(alpha: 0.25),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      isLocked ? Icons.lock : Icons.lock_open,
+                      isLocked ? Icons.lock : Icons.track_changes,
                       size: 11,
-                      color: isLocked ? const Color(0xFF10B981) : Colors.white70,
+                      color: color,
                     ),
                     const SizedBox(width: 4),
                     Text(
                       isLocked ? 'TERKUNCI' : 'PELACAKAN',
                       style: TextStyle(
-                        color: isLocked ? const Color(0xFF10B981) : Colors.white70,
+                        color: color,
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
                       ),
@@ -841,7 +1105,7 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
             axisLabel: 'X (Pitch)',
             currentVal: '${_currentPitch >= 0 ? '+' : ''}${_currentPitch.toStringAsFixed(0)}°',
             targetVal: currentPose.targetXText,
-            isMatch: _isXMatch,
+            state: _stateX,
             icon: Icons.height,
           ),
 
@@ -850,7 +1114,7 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
             axisLabel: 'Y (Yaw)',
             currentVal: '${_currentYaw >= 0 ? '+' : ''}${_currentYaw.toStringAsFixed(0)}°',
             targetVal: currentPose.targetYText,
-            isMatch: _isYMatch,
+            state: _stateY,
             icon: Icons.swap_horiz,
           ),
 
@@ -859,7 +1123,7 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
             axisLabel: 'Z (Roll/Jrk)',
             currentVal: '${_currentRoll.toStringAsFixed(0)}° | ${(_currentDistRatio * 100).toStringAsFixed(0)}%',
             targetVal: currentPose.targetZText,
-            isMatch: _isZMatch,
+            state: _stateZ,
             icon: Icons.aspect_ratio,
           ),
 
@@ -878,7 +1142,7 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
             ),
             const SizedBox(height: 6),
             Text(
-              'Posisi Sempurna! Otomatis mengambil foto dalam ${((1.0 - _autoCaptureProgress) * 0.8).toStringAsFixed(1)}s...',
+              'Posisi Sempurna! Menjepret otomatis dalam ${((1.0 - _autoCaptureProgress) * 0.55).toStringAsFixed(1)}s...',
               style: const TextStyle(
                 color: Color(0xFF10B981),
                 fontSize: 11.5,
@@ -890,7 +1154,7 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
             Text(
               _statusMessage,
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.8),
+                color: Colors.white.withValues(alpha: 0.85),
                 fontSize: 11.5,
               ),
               textAlign: TextAlign.center,
@@ -904,7 +1168,7 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
   @override
   Widget build(BuildContext context) {
     final currentPose = kPoseTargets[_currentPoseIndex];
-    final isAligned = _isPoseAligned && _facesDetectedCount == 1 && _isFaceLargeEnough;
+    final isAligned = _overallState == AxisState.pass;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -918,15 +1182,23 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
                   child: CameraPreview(_cameraController!),
                 ),
 
-                // 2. Oval Face Guide Overlay
+                // 2. Oval Face Guide Overlay dengan Indikator Dinamis 3 Warna
                 CustomPaint(
                   painter: _FaceGuidePainter(
-                    isAligned: isAligned,
+                    overallState: _overallState,
                     hasFace: _facesDetectedCount > 0,
                   ),
                 ),
 
-                // 3. Top Bar (Header, Flip Camera & Pose Steps)
+                // 3. Efek Flash Putih Saat Jepret Otomatis
+                if (_showFlash)
+                  Positioned.fill(
+                    child: Container(
+                      color: Colors.white.withValues(alpha: 0.75),
+                    ),
+                  ),
+
+                // 4. Top Bar (Header, Flip Camera & Pose Steps)
                 Positioned(
                   top: MediaQuery.of(context).padding.top + 8,
                   left: 16,
@@ -1004,7 +1276,15 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
                   ),
                 ),
 
-                // 4. Live Sensor HUD Card (X, Y, Z)
+                // 5. Floating Instruction Banner (Tengok Kiri, Kanan, Atas, Bawah, Depan)
+                Positioned(
+                  top: MediaQuery.of(context).padding.top + 64,
+                  left: 16,
+                  right: 16,
+                  child: _buildInstructionBanner(currentPose, _overallState),
+                ),
+
+                // 6. Live Sensor HUD Card (X, Y, Z)
                 Positioned(
                   bottom: 116,
                   left: 16,
@@ -1012,7 +1292,7 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
                   child: _buildLiveSensorHud(currentPose),
                 ),
 
-                // 5. Bottom Controls (Shutter Button - otomatis auto-capture atau manual klik)
+                // 7. Bottom Controls (Shutter Button - Otomatis Hands-Free atau Manual Klik)
                 Positioned(
                   bottom: 24,
                   left: 0,
@@ -1067,6 +1347,24 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
                     ),
                   ),
                 ),
+
+                // 8. Watermark Versi Resmi
+                Positioned(
+                  bottom: 6,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Text(
+                      'SnapAttend v3.2.5 • Universitas Negeri Malang (UM)',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.4),
+                        fontSize: 9.5,
+                        letterSpacing: 0.4,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
     );
@@ -1074,24 +1372,25 @@ class _CaptureScreenState extends ConsumerState<CaptureScreen> {
 }
 
 class _FaceGuidePainter extends CustomPainter {
-  final bool isAligned;
+  final AxisState overallState;
   final bool hasFace;
 
-  _FaceGuidePainter({required this.isAligned, required this.hasFace});
+  _FaceGuidePainter({required this.overallState, required this.hasFace});
 
   @override
   void paint(Canvas canvas, Size size) {
     final ovalWidth = size.width * 0.72;
     final ovalHeight = size.height * 0.44;
+    final centerOffset = Offset(size.width / 2, size.height * 0.40);
     final rect = Rect.fromCenter(
-      center: Offset(size.width / 2, size.height * 0.38),
+      center: centerOffset,
       width: ovalWidth,
       height: ovalHeight,
     );
 
     // Gelapkan area di luar oval
     final backgroundPaint = Paint()
-      ..color = Colors.black.withValues(alpha: 0.45)
+      ..color = Colors.black.withValues(alpha: 0.48)
       ..style = PaintingStyle.fill;
 
     final path = Path()
@@ -1101,21 +1400,61 @@ class _FaceGuidePainter extends CustomPainter {
 
     canvas.drawPath(path, backgroundPaint);
 
-    // Garis batas oval glow
-    final Color borderColor = isAligned
-        ? const Color(0xFF10B981)
-        : (hasFace ? const Color(0xFFF59E0B) : Colors.white.withValues(alpha: 0.7));
+    final borderColor = getAxisColor(overallState);
+    final isLocked = overallState == AxisState.pass;
+
+    // Glowing outer ring saat locked
+    if (isLocked) {
+      final glowPaint = Paint()
+        ..color = borderColor.withValues(alpha: 0.35)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 8.0
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+      canvas.drawOval(rect, glowPaint);
+    }
 
     final borderPaint = Paint()
       ..color = borderColor
       ..style = PaintingStyle.stroke
-      ..strokeWidth = isAligned ? 3.5 : 2.0;
+      ..strokeWidth = isLocked ? 4.0 : (overallState == AxisState.warn ? 3.0 : 2.5);
 
     canvas.drawOval(rect, borderPaint);
+
+    // Corner guides / crosshair brackets di 4 penjuru oval
+    final bracketPaint = Paint()
+      ..color = borderColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.0;
+
+    const bracketLen = 16.0;
+    // Atas
+    canvas.drawLine(
+      Offset(centerOffset.dx, rect.top - 8),
+      Offset(centerOffset.dx, rect.top - 8 + bracketLen),
+      bracketPaint,
+    );
+    // Bawah
+    canvas.drawLine(
+      Offset(centerOffset.dx, rect.bottom + 8),
+      Offset(centerOffset.dx, rect.bottom + 8 - bracketLen),
+      bracketPaint,
+    );
+    // Kiri
+    canvas.drawLine(
+      Offset(rect.left - 8, centerOffset.dy),
+      Offset(rect.left - 8 + bracketLen, centerOffset.dy),
+      bracketPaint,
+    );
+    // Kanan
+    canvas.drawLine(
+      Offset(rect.right + 8, centerOffset.dy),
+      Offset(rect.right + 8 - bracketLen, centerOffset.dy),
+      bracketPaint,
+    );
   }
 
   @override
   bool shouldRepaint(covariant _FaceGuidePainter oldDelegate) {
-    return oldDelegate.isAligned != isAligned || oldDelegate.hasFace != hasFace;
+    return oldDelegate.overallState != overallState || oldDelegate.hasFace != hasFace;
   }
 }
